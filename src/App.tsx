@@ -926,6 +926,19 @@ export default function App() {
   const [highlightedIdeaId, setHighlightedIdeaId] = useState<string | null>(null);
   const [isLandscape, setIsLandscape] = useState(() => typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false);
 
+  const [readMode, setReadMode] = useState<'skim' | 'full'>(() => {
+    try { return window.localStorage.getItem('arc_read_mode') === 'full' ? 'full' : 'skim'; } catch { return 'skim'; }
+  });
+  const readModeRef = useRef(readMode);
+  useEffect(() => {
+    readModeRef.current = readMode;
+    try { window.localStorage.setItem('arc_read_mode', readMode); } catch {}
+  }, [readMode]);
+
+  const readModeInstruction = () => readModeRef.current === 'skim'
+    ? 'READING MODE: SKIM. Do not read the text verbatim: announce the section title, then give the gist in 2-3 short spoken sentences, keeping any key figures, names, dates or asks. If the user asks you to read it properly, read the full text verbatim.'
+    : 'READING MODE: FULL. Read the text aloud verbatim.';
+
   useEffect(() => {
     if (isLiveActive && liveServiceRef.current) {
       // Reset section tracking state for the new section
@@ -940,7 +953,7 @@ export default function App() {
         const lastSectionInstruction = isLastSection 
           ? " IMPORTANT: This is the LAST section of the entire document. Once you finish reading it, you MUST clearly announce that you have now concluded reading the entire document, and ask the user if they have any final comments, feedback, or notes to take before stopping." 
           : "";
-        liveServiceRef.current.sendText(`Please read this chunk aloud (Section: ${currentChunk.section}). Note: The screen is already synchronized to this section. Directly start reading the following text aloud without calling change_section or any other tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${currentChunkIndex + 1}: ${currentChunk.section}").${lastSectionInstruction}\n\n${currentChunk.text}`);
+        liveServiceRef.current.sendText(`Please deliver this chunk aloud (Section: ${currentChunk.section}). ${readModeInstruction()} Note: The screen is already synchronized to this section. Directly start without calling change_section or any other tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${currentChunkIndex + 1}: ${currentChunk.section}").${lastSectionInstruction}\n\n${currentChunk.text}`);
       } else {
         // Reset tracking to default 'ui' for future user interaction clicks
         isSourceOfSectionChangeRef.current = 'ui';
@@ -1261,6 +1274,17 @@ export default function App() {
                     capturedIdeaId: ideaId
                   }];
                 });
+              } else if (fc.name === 'set_reading_mode') {
+                const mode = fc.args.mode === 'full' ? 'full' : 'skim';
+                readModeRef.current = mode;
+                setReadMode(mode);
+                liveServiceRef.current?.sendToolResponse({
+                  functionResponses: [{
+                    name: "set_reading_mode",
+                    response: { output: `Reading mode set to ${mode}. ${readModeInstruction()} Briefly confirm the switch, then deliver the current section (${docChunksRef.current[currentChunkIndexRef.current]?.section}) in this mode: "${docChunksRef.current[currentChunkIndexRef.current]?.text}"` },
+                    id: fc.id
+                  }]
+                });
               } else if (fc.name === 'stop_playback') {
                 liveServiceRef.current?.sendToolResponse({
                   functionResponses: [{
@@ -1294,7 +1318,7 @@ export default function App() {
                     functionResponses: [{
                       name: "change_section",
                       response: { 
-                        output: `Section successfully changed to index ${index}: ${docChunks[index].section}. The exact content text of this section is: "${docChunks[index].text}". Please read this text aloud now without calling any more tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${index + 1}: ${docChunks[index].section}").` 
+                        output: `Section successfully changed to index ${index}: ${docChunks[index].section}. The exact content text of this section is: "${docChunks[index].text}". ${readModeInstruction()} Deliver it now without calling any more tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${index + 1}: ${docChunks[index].section}").` 
                       },
                       id: fc.id
                     }]
@@ -1893,6 +1917,13 @@ export default function App() {
           sectionTitle={cleanSectionHeading(currentChunk.section)}
           docNode={<DocumentTextRenderer text={currentChunk.text} />}
           totalSections={docChunks.length}
+          readMode={readMode}
+          onToggleReadMode={() => setReadMode(m => {
+            const next = m === 'skim' ? 'full' : 'skim';
+            readModeRef.current = next;
+            // Takes effect from the next section: each section's prompt carries the current mode.
+            return next;
+          })}
           activeSection={currentChunkIndex}
           scrubPage={scrubPage}
           docTitle={loadedDocTitle || 'Untitled Document'}

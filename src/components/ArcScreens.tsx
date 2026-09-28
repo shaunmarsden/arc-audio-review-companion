@@ -474,7 +474,7 @@ export function PlaybackScreen({
   comments, onToggleComments, onTogglePlay, onToggleMute, onToggleMenu,
   onPrevChunk, onNextChunk, onJumpChunk, onPrevWindow, onNextWindow,
   onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment,
-  onLoadNew, onReload
+  onLoadNew, onReload, readMode, onToggleReadMode
 }: any) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -551,6 +551,19 @@ export function PlaybackScreen({
               <span style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>Active section</span>
               <span style={{ margin: '0 6px', opacity: 0.5 }}>·</span>
               <span style={{ color: ARC.text, fontWeight: 500 }}>{activeSection + 1} / {totalSections}</span>
+              {onToggleReadMode && (
+                <>
+                  <span style={{ margin: '0 6px', opacity: 0.5 }}>·</span>
+                  <button
+                    type="button"
+                    onClick={onToggleReadMode}
+                    title={readMode === 'skim' ? 'Skimming: ARC gives the gist of each section. Click to read in full.' : 'Reading in full. Click to skim.'}
+                    style={{ letterSpacing: '0.04em', textTransform: 'uppercase', color: ARC.text, fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, font: 'inherit' }}
+                  >
+                    {readMode === 'skim' ? 'Skim' : 'Full'}
+                  </button>
+                </>
+              )}
             </span>
           </div>
           <SectionCarousel total={totalSections} active={activeSection} scrubPage={scrubPage} onSelect={onJumpChunk} onPrevWindow={onPrevWindow} onNextWindow={onNextWindow} />

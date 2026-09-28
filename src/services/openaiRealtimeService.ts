@@ -49,6 +49,18 @@ const TOOLS = [
   },
   {
     type: "function",
+    name: "set_reading_mode",
+    description: "Switches how sections are delivered for the rest of the session. 'skim' gives a 2-3 sentence gist of each section; 'full' reads each section verbatim. Call when the user asks to switch to skimming or full reading. Not needed for a one-off full read of the current section.",
+    parameters: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["skim", "full"], description: "The reading mode to switch to." }
+      },
+      required: ["mode"]
+    }
+  },
+  {
+    type: "function",
     name: "stop_playback",
     description: "Stops the playback and ends or pauses the current review session completely (turns off the microphone and stops ARC's speech). Call this tool only when the user confirms they have no more feedback/comments and all queries are handled at the end of the document, or when the user tells you to stop playback, pause indefinitely, or stop reading.",
     parameters: { type: "object", properties: {}, required: [] }
