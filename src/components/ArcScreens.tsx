@@ -3,7 +3,6 @@ import { MicButton } from './MicButton';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ARC, 
-  embossShadow, 
   outlineShadow, 
   embossedDivider,
   embossedDividerV,
@@ -116,7 +115,7 @@ export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 28, alignItems: 'flex-start' }}>
           <ArcLogo height={72} />
           <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: ARC.muted, maxWidth: 320 }}>
-            Listen to your Google Docs and add comments hands free.
+            Listen to your documents and add comments hands free.
           </p>
         </div>
 
@@ -503,7 +502,7 @@ export function PlaybackScreen({
   comments, onToggleComments, onTogglePlay, onToggleMute, onToggleMenu,
   onPrevChunk, onNextChunk, onJumpChunk, onPrevWindow, onNextWindow,
   onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment, canSyncToDoc,
-  onLoadNew, onReload, readMode, onToggleReadMode
+  onLoadNew, onReload, readMode, onToggleReadMode, errorMessage, onDismissError
 }: any) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -574,6 +573,12 @@ export function PlaybackScreen({
 
         {/* Bottom controls container */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: ARC.bg, position: 'relative', zIndex: 20, paddingBottom: 16 }}>
+          {errorMessage && (
+            <div role="alert" style={{ margin: '8px 16px 0', padding: '10px 12px', borderRadius: 10, border: `1px solid ${ARC.error}`, color: ARC.error, background: ARC.surface2, fontSize: 13, lineHeight: 1.4, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ flex: 1 }}>{errorMessage}</span>
+              <button type="button" onClick={onDismissError} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: ARC.error, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+          )}
           <div style={{ ...embossedDivider, marginBottom: 4 }} />
           <div style={{ display: 'flex', justifyContent: 'center', padding: '0 22px', fontSize: 14, color: ARC.muted, fontVariantNumeric: 'tabular-nums' }}>
             <span>
@@ -615,7 +620,7 @@ export function PlaybackScreen({
             style={{ position: 'absolute', top: 60, right: 14, background: ARC.surface2, border: `1px solid ${ARC.border}`, borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06)', padding: 6, minWidth: 200, zIndex: 30 }}
           >
             <MenuItem icon={<IconDoc size={16} stroke={ARC.muted} />} label="Load new document" onClick={() => { onLoadNew(); onToggleMenu(); }} />
-            <MenuItem icon={<IconCycle size={16} stroke={ARC.muted} />} label="Reload document" onClick={() => { onReload(); onToggleMenu(); }} />
+            {onReload && <MenuItem icon={<IconCycle size={16} stroke={ARC.muted} />} label="Reload document" onClick={() => { onReload(); onToggleMenu(); }} />}
             <div style={{ ...embossedDivider, margin: '4px 6px' }} />
             <MenuItem label="Comments" badge={comments.length} onClick={() => { onToggleComments(); onToggleMenu(); }} />
           </div>

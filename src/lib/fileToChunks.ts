@@ -1,5 +1,3 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import * as mammoth from 'mammoth/mammoth.browser';
 import type { DocChunk } from '../dummyData';
 
 // Turns an uploaded PDF, DOCX, Markdown or text file into listenable sections.
@@ -141,6 +139,13 @@ function textToBlocks(text: string): Block[] {
 }
 
 async function pdfToText(file: File): Promise<string> {
+  // Loaded on demand: pdf.js is large and only needed for PDF uploads. The worker is bundled
+  // with the app rather than fetched from a CDN.
+  const [pdfjsLib, worker] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+  ]);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = worker.default;
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   const pages: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -155,12 +160,22 @@ async function pdfToText(file: File): Promise<string> {
   return pages.join('\n\n').normalize('NFKC').replace(/([.!?])\s*\n/g, '$1\n\n').replace(/[ \t]+/g, ' ');
 }
 
+export function htmlToChunks(html: string, fallbackTitle: string): DocChunk[] {
+  return blocksToChunks(htmlToBlocks(html), fallbackTitle);
+}
+
+export function textToChunks(text: string, fallbackTitle: string): DocChunk[] {
+  return blocksToChunks(textToBlocks(text), fallbackTitle);
+}
+
 export async function fileToChunks(file: File): Promise<{ title: string; chunks: DocChunk[] }> {
   const title = file.name.replace(/\.[^.]+$/, '');
   const name = file.name.toLowerCase();
   let blocks: Block[];
 
   if (name.endsWith('.docx')) {
+    const mod: any = await import('mammoth/mammoth.browser');
+    const mammoth = mod.convertToHtml ? mod : mod.default;
     const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
     blocks = htmlToBlocks(value);
   } else if (name.endsWith('.pdf')) {

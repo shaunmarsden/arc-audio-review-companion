@@ -8,21 +8,6 @@ export function floatTo16BitPCM(input: Float32Array): ArrayBuffer {
   return buffer;
 }
 
-export function pcmToFloat32(base64Data: string): Float32Array {
-  const binary = atob(base64Data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  const view = new DataView(bytes.buffer);
-  const float32Array = new Float32Array(bytes.length / 2);
-  for (let i = 0; i < float32Array.length; i++) {
-    const int16 = view.getInt16(i * 2, true);
-    float32Array[i] = int16 / 32768;
-  }
-  return float32Array;
-}
-
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = '';
   const bytes = new Uint8Array(buffer);

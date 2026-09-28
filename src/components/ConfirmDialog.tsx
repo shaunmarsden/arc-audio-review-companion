@@ -79,7 +79,7 @@ export function ConfirmDialog({ isOpen, onClose, onConfirm }: ConfirmDialogProps
           Unsaved Comments Will Be Lost
         </h3>
         <p id="dialog-description" className="text-base text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
-          Loading a new document will clear your current review session and any captured comments that have not been synced.
+          Loading a new document clears this review and its comments. Use Download comments in the notes panel first if you want to keep them.
         </p>
         <div className="flex justify-start gap-3">
           <button

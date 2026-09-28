@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { Mic } from 'lucide-react';
 
 const ARC_MIC_CSS = `
 /* Mic active-state indicator — soft glow + shimmer animation. */

@@ -1,8 +1,0 @@
-{
-  "name": "Remix: ARC - Audio Review Companion",
-  "description": "A tool for reviewing documents and adding comments / feedback real-time chat, and persistent memory.",
-  "requestFramePermissions": [
-    "microphone"
-  ],
-  "majorCapabilities": []
-}

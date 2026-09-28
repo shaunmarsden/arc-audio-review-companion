@@ -1,42 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Mic, 
-  MicOff, 
-  Volume2, 
-  VolumeX, 
-  Brain, 
-  Play,
-  Square,
-  Terminal,
-  MessageSquare,
-  RotateCcw,
-  RefreshCw,
-  ZoomIn,
-  ZoomOut,
-  Move,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  Send,
-  Cpu,
-  Trash2,
-  MoreHorizontal,
-  Lightbulb,
-  Download,
-  ExternalLink,
-  FlipHorizontal,
-  Menu,
-  Aperture,
-  StickyNote,
-  Sun,
-  Moon,
-  SwitchCamera,
-  CirclePlus
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Group, Panel, Separator } from 'react-resizable-panels';
 import { OpenAIRealtimeService, INPUT_SAMPLE_RATE } from './services/openaiRealtimeService';
 import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
@@ -45,14 +7,6 @@ import systemInstructionMarkdown from './prompts/arc_system_instruction.md?raw';
 import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen } from './components/ArcScreens';
 import { floatTo16BitPCM, arrayBufferToBase64 } from './lib/audioUtils';
 import { fileToChunks } from './lib/fileToChunks';
-
-import * as mammoth from 'mammoth/mammoth.browser';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Safe worker loading for Vite
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-}
 
 // Inline resample function since it's missing from audioUtils
 function resample(audioBuffer: Float32Array, targetSampleRate: number, currentSampleRate: number) {
@@ -73,15 +27,6 @@ function resample(audioBuffer: Float32Array, targetSampleRate: number, currentSa
   return result;
 }
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text?: string;
-  imageUrl?: string;
-  timestamp: Date;
-  capturedIdeaId?: string;
-}
-
 interface CapturedIdea {
   id: string;
   text: string;
@@ -96,7 +41,7 @@ interface CapturedIdea {
 
 import { DUMMY_DOC, DocChunk } from './dummyData';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 // Initialize Firebase safely by checking environment variables first, falling back to optional JSON
 const env = (import.meta as any).env || {};
 const configGlob = (import.meta as any).glob('../firebase-applet-config.json', { eager: true });
@@ -343,6 +288,12 @@ function DocumentTextRenderer({ text }: { text: string }) {
   );
 }
 
+// Returned to the model after a comment is saved. Resuming is spelled out here because the model
+// otherwise tends to say "Resuming..." and then stop.
+export const CAPTURE_SAVED_OUTPUT = "Comment saved. Confirm in a few words (e.g. \"Noted.\"). Then, if you were cut off before finishing the current section, say \"Resuming\" and continue reading from the start of the sentence you were on, in the current reading mode, through to the end of the section. If you had already finished the section, stop speaking.";
+
+const PAUSE_PHRASES = [/\bpause\b/, /\bstop\b/, /\bhold on\b/, /\bhang on\b/];
+
 async function generateImageAltText(imageUrl: string, title?: string, description?: string): Promise<string> {
   const ctxStr = [title, description].filter(Boolean).join(' - ');
 
@@ -495,7 +446,6 @@ export default function App() {
     const saved = window.localStorage.getItem('review_session');
     return saved ? JSON.parse(saved).currentChunkIndex : 0;
   });
-  const [isReviewPaused, setIsReviewPaused] = useState(false);
   const currentChunk = docChunks[currentChunkIndex] || { id: 'empty', section: 'No Document', text: '' };
 
   const [googleUser, setGoogleUser] = useState<any | null>(() => {
@@ -768,18 +718,6 @@ export default function App() {
     }
   };
 
-  const handleScrubTouchStart = (e: React.TouchEvent) => { touchStartRef.current = e.touches[0].clientX; };
-  const handleScrubTouchEnd = (e: React.TouchEvent) => {
-    const delta = touchStartRef.current - e.changedTouches[0].clientX;
-    if (Math.abs(delta) > 50) {
-      if (delta > 0) { // swipe left
-         setScrubPage(prev => Math.min(Math.ceil(docChunks.length / 10) - 1, prev + 1));
-      } else { // swipe right
-         setScrubPage(prev => Math.max(0, prev - 1));
-      }
-    }
-  };
-
   const loadGoogleDoc = async (inputUrl: string) => {
     if (!authToken) {
       setDocError('Please connect your Google account first.');
@@ -853,16 +791,12 @@ export default function App() {
     setCurrentChunkIndex(index);
   };
 
-  const [activeChatMenuId, setActiveChatMenuId] = useState<string | null>(null);
-  const [activeStickyMenuId, setActiveStickyMenuId] = useState<string | null>(null);
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   // Live API State
   const [isLiveActive, setIsLiveActive] = useState(false);
   const isLiveActiveRef = useRef(false);
   const isSourceOfSectionChangeRef = useRef<'ui' | 'tool'>('ui');
   const [scrubPage, setScrubPage] = useState(0);
-  const touchStartRef = useRef(0);
 
   useEffect(() => {
     isLiveActiveRef.current = isLiveActive;
@@ -880,9 +814,6 @@ export default function App() {
 
   const [isArcSpeaking, setIsArcSpeaking] = useState(false);
   const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [tokenUsage, setTokenUsage] = useState({ prompt: 0, candidates: 0, total: 0 });
-  const [micLevel, setMicLevel] = useState(0);
-  const [arcLevel, setArcLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(true);
   const isMutedRef = useRef(true);
@@ -890,31 +821,18 @@ export default function App() {
     isMutedRef.current = isMuted;
   }, [isMuted]);
   
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [inputText, setInputText] = useState('');
   const liveServiceRef = useRef<OpenAIRealtimeService | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextPlayTimeRef = useRef<number>(0);
   const playingSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioWorkletRef = useRef<ScriptProcessorNode | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const arcAnalyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const lastCaptureTimeRef = useRef<number>(0);
-  const motionDetectedRef = useRef<boolean>(false);
   const hasPlayedAudioForSectionRef = useRef<boolean>(false);
   const isTurnCompleteRef = useRef<boolean>(false);
   const wasInterruptedRef = useRef<boolean>(false);
   const interactionsOccurredForSectionRef = useRef<boolean>(false);
   
-  const [stagedFiles, setStagedFiles] = useState<{name: string, content: string, imageUrl?: string}[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Chat State
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', role: 'assistant', text: "Hello! I'm ARC, your ideation partner.", timestamp: new Date() }
-  ]);
   const [capturedIdeas, setCapturedIdeas] = useState<CapturedIdea[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -948,15 +866,7 @@ export default function App() {
     }
   }, [screenState, loadedDocId, loadedDocTitle, docChunks, currentChunkIndex, capturedIdeas]);
 
-  const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'context'>('chat');
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
-  const [isTablet, setIsTablet] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 768 && window.innerWidth <= 1180 : false);
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isNarrow, setIsNarrow] = useState(false);
-  const [highlightedIdeaId, setHighlightedIdeaId] = useState<string | null>(null);
-  const [isLandscape, setIsLandscape] = useState(() => typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false);
 
   const [readMode, setReadMode] = useState<'skim' | 'full'>(() => {
     try { return window.localStorage.getItem('arc_read_mode') === 'full' ? 'full' : 'skim'; } catch { return 'skim'; }
@@ -971,6 +881,10 @@ export default function App() {
     ? 'READING MODE: SKIM. Do not read the text verbatim: announce the section title, then give the gist in 2-3 short spoken sentences, keeping any key figures, names, dates or asks. If the user asks you to read it properly, read the full text verbatim.'
     : 'READING MODE: FULL. Read the text aloud verbatim.';
 
+  const lastSectionInstruction = (index: number, total: number) => index === total - 1
+    ? " IMPORTANT: This is the LAST section of the entire document. Once you finish reading it, you MUST clearly announce that you have now concluded reading the entire document, and ask the user if they have any final comments, feedback, or notes to take before stopping."
+    : "";
+
   useEffect(() => {
     if (isLiveActive && liveServiceRef.current) {
       // Reset section tracking state for the new section
@@ -981,11 +895,7 @@ export default function App() {
       nextPlayTimeRef.current = audioContextRef.current ? audioContextRef.current.currentTime : 0;
 
       if (isSourceOfSectionChangeRef.current === 'ui') {
-        const isLastSection = currentChunkIndex === docChunks.length - 1;
-        const lastSectionInstruction = isLastSection 
-          ? " IMPORTANT: This is the LAST section of the entire document. Once you finish reading it, you MUST clearly announce that you have now concluded reading the entire document, and ask the user if they have any final comments, feedback, or notes to take before stopping." 
-          : "";
-        liveServiceRef.current.sendText(`Please deliver this chunk aloud (Section: ${currentChunk.section}). ${readModeInstruction()} Note: The screen is already synchronized to this section. Directly start without calling change_section or any other tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${currentChunkIndex + 1}: ${currentChunk.section}").${lastSectionInstruction}\n\n${currentChunk.text}`);
+        liveServiceRef.current.sendText(`Please deliver this chunk aloud (Section: ${currentChunk.section}). ${readModeInstruction()} Note: The screen is already synchronized to this section. Directly start without calling change_section or any other tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${currentChunkIndex + 1}: ${currentChunk.section}").${lastSectionInstruction(currentChunkIndex, docChunks.length)}\n\n${currentChunk.text}`);
       } else {
         // Reset tracking to default 'ui' for future user interaction clicks
         isSourceOfSectionChangeRef.current = 'ui';
@@ -993,11 +903,15 @@ export default function App() {
     }
   }, [isLiveActive, currentChunkIndex, currentChunk.id]);
 
-  // Keep Arc updated about document structure changes dynamically
+  // Tell ARC when the document changes mid-session. The structure at connect time is already in the
+  // system instructions, so this only sends later changes, and as context rather than a prompt to speak.
+  const announcedDocRef = useRef<DocChunk[] | null>(null);
   useEffect(() => {
-    if (isLiveActive && liveServiceRef.current && docChunks.length > 0) {
-      liveServiceRef.current.sendText(`[System Context: Active document structure updated to: "${loadedDocTitle || 'Untitled document'}" with ${docChunks.length} sections. Available indexes for the change_section tool are:\n${docChunks.map((c, i) => `${i}: "${c.section}"`).join('\n')}]`);
-    }
+    if (!isLiveActive) { announcedDocRef.current = null; return; }
+    if (announcedDocRef.current === null) { announcedDocRef.current = docChunks; return; }
+    if (announcedDocRef.current === docChunks || !liveServiceRef.current || docChunks.length === 0) return;
+    announcedDocRef.current = docChunks;
+    liveServiceRef.current.sendContext(`[System Context: Active document structure updated to: "${loadedDocTitle || 'Untitled document'}" with ${docChunks.length} sections. Available indexes for the change_section tool are:\n${docChunks.map((c, i) => `${i}: "${c.section}"`).join('\n')}]`);
   }, [isLiveActive, docChunks, loadedDocTitle]);
 
   // Navigation
@@ -1010,7 +924,7 @@ export default function App() {
     interactionsOccurredForSectionRef.current = false;
     nextPlayTimeRef.current = audioContextRef.current ? audioContextRef.current.currentTime : 0;
     isSourceOfSectionChangeRef.current = 'ui';
-    setCurrentChunkIndex(prev => Math.min(docChunks.length - 1, prev + 1));
+    setCurrentChunkIndex(prev => Math.min(docChunksRef.current.length - 1, prev + 1));
   };
   
   const prevChunk = () => {
@@ -1025,8 +939,9 @@ export default function App() {
     setCurrentChunkIndex(prev => Math.max(0, prev - 1));
   };
 
+  // Called from audio and session callbacks created once per session, so it must read refs.
   const checkAutoAdvance = () => {
-    if (currentChunkIndex >= docChunks.length - 1) {
+    if (currentChunkIndexRef.current >= docChunksRef.current.length - 1) {
       return;
     }
     if (
@@ -1052,38 +967,17 @@ export default function App() {
     }
   };
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const panelContainerRef = useRef<HTMLDivElement>(null);
+  // When each assistant audio item started playing (AudioContext time), so the service can tell
+  // OpenAI how much the user actually heard when they interrupt.
+  const itemPlaybackStartRef = useRef<Map<string, number>>(new Map());
+  const getPlayedMs = (itemId: string) => {
+    const ctx = audioContextRef.current;
+    const start = itemPlaybackStartRef.current.get(itemId);
+    if (!ctx || start === undefined) return 0;
+    return Math.max(0, (ctx.currentTime - start) * 1000);
+  };
 
-  useEffect(() => {
-    if (!panelContainerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        setIsNarrow(entry.contentRect.width < 550);
-      }
-    });
-    observer.observe(panelContainerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      setIsMobile(width < 1024);
-      setIsTablet(width >= 768 && width <= 1180);
-      setIsLandscape(width > height);
-    };
-    checkMobile(); // Check on initial client side render
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const playAudioChunk = async (base64Audio: string) => {
+  const playAudioChunk = async (base64Audio: string, itemId?: string) => {
     if (!audioContextRef.current) return;
     const ctx = audioContextRef.current;
     
@@ -1106,15 +1000,12 @@ export default function App() {
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       
-      if (arcAnalyserRef.current) {
-        source.connect(arcAnalyserRef.current);
-      } else {
-        source.connect(ctx.destination);
-      }
+      source.connect(ctx.destination);
       
       const startTime = Math.max(ctx.currentTime, nextPlayTimeRef.current);
       const endTime = startTime + audioBuffer.duration;
       source.start(startTime);
+      if (itemId && !itemPlaybackStartRef.current.has(itemId)) itemPlaybackStartRef.current.set(itemId, startTime);
       
       nextPlayTimeRef.current = endTime;
       playingSourcesRef.current.push(source);
@@ -1142,62 +1033,6 @@ export default function App() {
     }
   };
 
-  const scrollToIdea = (ideaId: string) => {
-    setActiveTab('context');
-    if (isMobile) setIsMobileDrawerOpen(true);
-    setHighlightedIdeaId(ideaId);
-    
-    // Wait for the DOM to render the new activeTab, then scroll the note into view
-    setTimeout(() => {
-      const el = document.getElementById(`idea-${ideaId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-
-    setTimeout(() => {
-      setHighlightedIdeaId(null);
-    }, 2000);
-  };
-
-  const approveIdea = (messageId: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id === messageId && m.suggestion) {
-        const ideaId = addIdea(m.suggestion.idea, 'arc', m.imageUrl);
-        
-        // Send tool response back to Arc
-        liveServiceRef.current?.sendToolResponse({
-          functionResponses: [{
-            name: "suggest_idea_capture",
-            response: { output: "Idea captured successfully." },
-            id: m.suggestion.toolCallId
-          }]
-        });
-
-        return { ...m, suggestion: { ...m.suggestion, status: 'approved' }, capturedIdeaId: ideaId };
-      }
-      return m;
-    }));
-  };
-
-  const rejectIdea = (messageId: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id === messageId && m.suggestion) {
-        // Send tool response back to Arc
-        liveServiceRef.current?.sendToolResponse({
-          functionResponses: [{
-            name: "suggest_idea_capture",
-            response: { output: "User declined to capture this idea." },
-            id: m.suggestion.toolCallId
-          }]
-        });
-
-        return { ...m, suggestion: { ...m.suggestion, status: 'rejected' } };
-      }
-      return m;
-    }));
-  };
-
   const startLiveSession = async () => {
     if (isLiveActive) {
       stopLiveSession();
@@ -1207,8 +1042,14 @@ export default function App() {
     try {
       // 1. Start Audio
       setMicError(null);
-      setDebugLogs(prev => ["Starting live session...", ...prev.slice(0, 19)]);
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.debug("[ARC]", "Starting live session...");
+      // Created before any await so it counts as part of the click (Safari only allows audio then).
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This browser can't use the microphone here. Open ARC at http://localhost:3000 in Chrome, Edge, Firefox or Safari.");
+      }
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       micStreamRef.current = micStream;
       setIsMuted(false);
 
@@ -1220,32 +1061,21 @@ export default function App() {
           if (role === 'user') {
             const cleanText = text.replace(/[^a-zA-Z0-9 ]/g, '').trim().toLowerCase();
             if (cleanText.length > 1) {
-              const stopWords = [
-                'pause', 'stop', 'wait', 'hold', 'second', 'hang on', 'minute',
-                'note', 'comment', 'discuss', 'think', 'thought', 'idea', 'question',
-                'explain', 'what', 'why', 'how', 'mean'
-              ];
-              if (stopWords.some(w => cleanText.includes(w))) {
+              // Only an explicit request to pause halts auto-advance; comments and questions don't.
+              // Keep in sync with "Auto-Advancing" in arc_system_instruction.md.
+              if (PAUSE_PHRASES.some(re => re.test(cleanText))) {
                 interactionsOccurredForSectionRef.current = true;
               }
             }
           }
-          setMessages(prev => {
-            const last = prev[prev.length - 1];
-            // If the last message is from the same role and is recent, append to it
-            if (last && last.role === (role === 'model' ? 'assistant' : 'user') && last.text !== undefined && Date.now() - last.timestamp.getTime() < 5000) {
-              const newText = last.text + " " + text;
-              return [...prev.slice(0, -1), { ...last, text: newText }];
-            }
-            return [...prev, { id: generateId(), role: role === 'model' ? 'assistant' : 'user', text, timestamp: new Date() }];
-          });
         },
-        onAudioData: (base64Audio) => {
+        getPlayedMs,
+        onAudioData: (base64Audio, itemId) => {
           setIsArcSpeaking(true);
           if (playingSourcesRef.current.length === 0) {
             wasInterruptedRef.current = false;
           }
-          playAudioChunk(base64Audio);
+          playAudioChunk(base64Audio, itemId);
           
           if (speakingTimeoutRef.current) {
             clearTimeout(speakingTimeoutRef.current);
@@ -1264,48 +1094,29 @@ export default function App() {
           isTurnCompleteRef.current = true;
           checkAutoAdvance();
         },
-        onUsageUpdate: (usage) => {
-          setTokenUsage(prev => ({
-            prompt: Math.max(prev.prompt, usage.promptTokens),
-            candidates: Math.max(prev.candidates, usage.candidatesTokens),
-            total: Math.max(prev.total, usage.totalTokens)
-          }));
-        },
         onToolCall: (toolCall) => {
           if (toolCall.functionCalls) {
             toolCall.functionCalls.forEach((fc: any) => {
               if (fc.name === 'capture_idea') {
-                const idea = fc.args.idea;
-                
-                const ideaId = addIdea(idea, 'arc', undefined, true);
+                const idea = typeof fc.args.idea === 'string' ? fc.args.idea.trim() : '';
+                if (!idea) {
+                  liveServiceRef.current?.sendToolResponse({
+                    functionResponses: [{ name: "capture_idea", response: { error: "The comment text was empty, so nothing was saved. Ask the user to repeat it." }, id: fc.id }]
+                  });
+                  return;
+                }
+
+                addIdea(idea, 'arc');
                 
                 // Send response back immediately
                 liveServiceRef.current?.sendToolResponse({
                   functionResponses: [{
                     name: "capture_idea",
-                    response: { output: "Idea correctly logged and saved." },
+                    response: { output: CAPTURE_SAVED_OUTPUT },
                     id: fc.id
                   }]
                 });
-                
-                // Attach sticky note to the latest assistant message
-                setMessages(prev => {
-                  const cloned = [...prev];
-                  for (let i = cloned.length - 1; i >= 0; i--) {
-                    if (cloned[i].role === 'assistant') {
-                      cloned[i] = { ...cloned[i], capturedIdeaId: ideaId };
-                      return cloned;
-                    }
-                  }
-                  // Fallback: if no assistant message exists yet
-                  return [...cloned, {
-                    id: Date.now().toString() + Math.random().toString(),
-                    role: 'assistant',
-                    timestamp: new Date(),
-                    text: '',
-                    capturedIdeaId: ideaId
-                  }];
-                });
+
               } else if (fc.name === 'set_reading_mode') {
                 const mode = fc.args.mode === 'full' ? 'full' : 'skim';
                 readModeRef.current = mode;
@@ -1325,12 +1136,17 @@ export default function App() {
                     id: fc.id
                   }]
                 });
-                setTimeout(() => {
-                  stopLiveSession();
-                }, 200);
+                // Let ARC finish speaking its goodbye (up to 8s) before closing the session.
+                const stopAt = Date.now() + 8000;
+                const stopWhenQuiet = () => {
+                  if (playingSourcesRef.current.length === 0 || Date.now() > stopAt) stopLiveSession();
+                  else setTimeout(stopWhenQuiet, 250);
+                };
+                setTimeout(stopWhenQuiet, 400);
               } else if (fc.name === 'change_section') {
                 const index = Number(fc.args.sectionIndex);
-                if (!isNaN(index) && index >= 0 && index < docChunks.length) {
+                const chunks = docChunksRef.current;
+                if (Number.isInteger(index) && index >= 0 && index < chunks.length) {
                   // Stop active playback immediately to be clean
                   playingSourcesRef.current.forEach(source => { try { source.stop(); } catch(e) {} });
                   playingSourcesRef.current = [];
@@ -1340,17 +1156,19 @@ export default function App() {
                   interactionsOccurredForSectionRef.current = false;
                   nextPlayTimeRef.current = audioContextRef.current ? audioContextRef.current.currentTime : 0;
                   
-                  // Set source of section change to 'tool'
-                  isSourceOfSectionChangeRef.current = 'tool';
-                  
-                  // Set section
-                  setCurrentChunkIndex(index);
+                  // Mark the change as tool-driven so the section effect doesn't send the text again
+                  // (the tool response below carries it). Re-reading the current section doesn't
+                  // re-run that effect, so leave the flag alone in that case.
+                  if (index !== currentChunkIndexRef.current) {
+                    isSourceOfSectionChangeRef.current = 'tool';
+                    setCurrentChunkIndex(index);
+                  }
                   
                   liveServiceRef.current?.sendToolResponse({
                     functionResponses: [{
                       name: "change_section",
                       response: { 
-                        output: `Section successfully changed to index ${index}: ${docChunks[index].section}. The exact content text of this section is: "${docChunks[index].text}". ${readModeInstruction()} Deliver it now without calling any more tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${index + 1}: ${docChunks[index].section}").` 
+                        output: `Section successfully changed to index ${index}: ${chunks[index].section}. The exact content text of this section is: "${chunks[index].text}". ${readModeInstruction()} Deliver it now without calling any more tools. IMPORTANT: Always start by announcing the section title (e.g. "Section ${index + 1}: ${chunks[index].section}").${lastSectionInstruction(index, chunks.length)}` 
                       },
                       id: fc.id
                     }]
@@ -1359,7 +1177,7 @@ export default function App() {
                   liveServiceRef.current?.sendToolResponse({
                     functionResponses: [{
                       name: "change_section",
-                      response: { error: `Invalid section index: ${fc.args.sectionIndex}. Range is 0 to ${docChunks.length - 1}.` },
+                      response: { error: `Invalid section index: ${fc.args.sectionIndex}. Range is 0 to ${chunks.length - 1}.` },
                       id: fc.id
                     }]
                   });
@@ -1370,56 +1188,30 @@ export default function App() {
         },
         onError: (err) => {
           console.error("Live session error:", err);
+          setMicError(err?.message || 'Something went wrong with the voice session. Press play to try again.');
           stopLiveSession();
         },
-        onClose: () => {
-          setIsLiveActive(false);
+        onClose: (info) => {
+          if (!info.expected) {
+            // Network drop, session time limit or server error: release the mic and audio too.
+            liveServiceRef.current = null;
+            teardownAudio();
+            setIsLiveActive(false);
+            setMicError(`The voice session ended${info.reason ? ` (${info.reason})` : ''}. Press play to carry on from this section.`);
+          }
         },
         onDebugLog: (msg) => {
-          setDebugLogs(prev => [msg, ...prev.slice(0, 19)]);
+          console.debug("[ARC]", msg);
         }
       }, {
         systemInstruction: `${systemInstructionMarkdown}\n\n## Current Document Structure\nYou are currently reviewing the document: "${loadedDocTitle || 'Default Document'}" which contains exactly ${docChunks.length} sections.\nThe active sections that correspond to the available indexes for the \`change_section\` tool are:\n${docChunks.map((chunk, index) => `- **UI Section ${index + 1}** (Index ${index}): "${chunk.section}"`).join('\n')}\n\nCRITICAL: Use these exact indexes and titles when updating active sections. If the user asks you to skip forward, go back or go to a section, select the correct 0-based index from this list.`,
       });
 
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       await audioContext.resume();
-      audioContextRef.current = audioContext;
-      
-      // Arc Output Analyser
-      const arcAnalyser = audioContext.createAnalyser();
-      arcAnalyser.fftSize = 256;
-      arcAnalyser.connect(audioContext.destination);
-      arcAnalyserRef.current = arcAnalyser;
       
       const source = audioContext.createMediaStreamSource(micStream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyserRef.current = analyser;
-      source.connect(analyser);
-
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
       audioWorkletRef.current = processor;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const arcDataArray = new Uint8Array(arcAnalyserRef.current.frequencyBinCount);
-      
-      const updateLevel = () => {
-        if (analyserRef.current) {
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          setMicLevel(average);
-        }
-        
-        if (arcAnalyserRef.current) {
-          arcAnalyserRef.current.getByteFrequencyData(arcDataArray);
-          const average = arcDataArray.reduce((a, b) => a + b) / arcDataArray.length;
-          setArcLevel(average);
-        }
-        
-        animationFrameRef.current = requestAnimationFrame(updateLevel);
-      };
-      updateLevel();
 
       processor.onaudioprocess = (e) => {
         if (isLiveActiveRef.current && !isMutedRef.current) {
@@ -1454,303 +1246,49 @@ export default function App() {
       silentGain.connect(audioContext.destination);
 
       setIsLiveActive(true);
-      setDebugLogs(prev => ["Session active", ...prev.slice(0, 19)]);
+      console.debug("[ARC]", "Session active");
 
     } catch (err) {
       console.error("Failed to start live session:", err);
+      // Release the mic and anything half-started so the browser's mic indicator goes off.
+      liveServiceRef.current?.disconnect();
+      liveServiceRef.current = null;
+      teardownAudio();
+      setIsLiveActive(false);
       if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-        setMicError("Microphone access was denied. Please ensure you've granted permission in your browser settings.");
+        setMicError("Microphone access was blocked. Allow the microphone for this page (the icon at the right of the address bar), then press play again.");
+      } else if (err instanceof DOMException && err.name === 'NotFoundError') {
+        setMicError("No microphone was found. Plug one in or check your sound settings, then press play again.");
       } else {
         setMicError(err instanceof Error ? err.message : String(err));
       }
-      setDebugLogs(prev => [`Failed: ${err}`, ...prev.slice(0, 19)]);
+      console.debug("[ARC]", `Failed: ${err}`);
     }
+  };
+
+  // Releases the mic, audio graph and playback. Safe to call more than once.
+  const teardownAudio = () => {
+    if (audioWorkletRef.current) { audioWorkletRef.current.onaudioprocess = null; audioWorkletRef.current.disconnect(); }
+    audioWorkletRef.current = null;
+    if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
+    micStreamRef.current = null;
+    playingSourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
+    playingSourcesRef.current = [];
+    itemPlaybackStartRef.current.clear();
+    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
+    audioContextRef.current = null;
+    nextPlayTimeRef.current = 0;
+    setIsArcSpeaking(false);
   };
 
   const stopLiveSession = () => {
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    if (audioWorkletRef.current) audioWorkletRef.current.disconnect();
-    if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
-    
-    if (liveServiceRef.current) liveServiceRef.current.disconnect();
-    
-    playingSourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
-    playingSourcesRef.current = [];
+    const service = liveServiceRef.current;
+    liveServiceRef.current = null;
+    if (service) service.disconnect();
+    teardownAudio();
     
     setIsLiveActive(false);
-    setMicLevel(0);
     setIsMuted(true); // Ensure UI reflects mute status
-    setDebugLogs(prev => [
-      `Session stopped. Final Usage: P:${tokenUsage.prompt} C:${tokenUsage.candidates} T:${tokenUsage.total}`,
-      ...prev.slice(0, 19)
-    ]);
-  };
-
-  const deleteMessage = (id: string) => {
-    setMessages(prev => prev.filter(m => m.id !== id));
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const files: File[] = Array.from(e.target.files || []);
-    
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            setStagedFiles(prev => {
-              if (prev.some(f => f.name === file.name)) return prev;
-              return [...prev, { name: file.name, content: '', imageUrl: event.target!.result as string }];
-            });
-          }
-        };
-        reader.readAsDataURL(file);
-      } else if (file.name.toLowerCase().endsWith('.pdf')) {
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-          let text = '';
-          for (let i = 1; i <= pdf.numPages; i++) {
-             const page = await pdf.getPage(i);
-             const content = await page.getTextContent();
-             text += content.items.map((item: any) => item.str).join(' ') + '\n';
-          }
-          setStagedFiles(prev => {
-            if (prev.some(f => f.name === file.name)) return prev;
-             return [...prev, { name: file.name, content: text }];
-          });
-        } catch (err) {
-          console.error("Failed to parse PDF", err);
-          alert("Failed to read PDF.");
-        }
-      } else if (file.name.toLowerCase().endsWith('.docx')) {
-         try {
-           const arrayBuffer = await file.arrayBuffer();
-           const result = await mammoth.extractRawText({ arrayBuffer });
-           setStagedFiles(prev => {
-             if (prev.some(f => f.name === file.name)) return prev;
-             return [...prev, { name: file.name, content: result.value }];
-           });
-         } catch (err) {
-           console.error("Failed to parse DOCX", err);
-           alert("Failed to read DOCX.");
-         }
-      } else {
-         const reader = new FileReader();
-         reader.onload = (event) => {
-           if (event.target?.result) {
-             setStagedFiles(prev => {
-               if (prev.some(f => f.name === file.name)) return prev;
-               return [...prev, { name: file.name, content: event.target!.result as string }];
-             });
-           }
-         };
-         reader.readAsText(file);
-      }
-    }
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const removeStagedFile = (name: string) => {
-    setStagedFiles(prev => prev.filter(f => f.name !== name));
-  };
-
-  const handleSendMessage = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if ((!inputText.trim() && stagedFiles.length === 0) || !liveServiceRef.current || !isLiveActive) return;
-
-    const cleanText = inputText.replace(/[^a-zA-Z0-9 ]/g, '').trim().toLowerCase();
-    const stopWords = [
-      'pause', 'stop', 'wait', 'hold', 'second', 'hang on', 'minute',
-      'note', 'comment', 'discuss', 'think', 'thought', 'idea', 'question',
-      'explain', 'what', 'why', 'how', 'mean'
-    ];
-    if (stopWords.some(w => cleanText.includes(w))) {
-      interactionsOccurredForSectionRef.current = true;
-    }
-
-    const text = inputText.trim();
-    let finalPayload = text;
-    let displayText = text;
-
-    let attachedImageUrls: string[] = [];
-
-    if (stagedFiles.length > 0) {
-      const textFiles = stagedFiles.filter(f => f.content);
-      const textContextStr = textFiles.map(f => `[Context File: ${f.name}]\n${f.content}\n`).join('\n---\n');
-      
-      const imageFiles = stagedFiles.filter(f => f.imageUrl);
-      
-      if (textFiles.length > 0) {
-          finalPayload = `Here are some attached files for context:\n${textContextStr}\n\n`;
-      } else {
-          finalPayload = '';
-      }
-      
-      if (imageFiles.length > 0) {
-          finalPayload += `[User also attached ${imageFiles.length} image(s).]\n\n`;
-          // We no longer send images to the live feed since video functionality was removed
-          imageFiles.forEach(img => {
-            if (img.imageUrl) {
-              attachedImageUrls.push(img.imageUrl);
-            }
-          });
-      }
-      
-      finalPayload += `User Question:\n${text}`;
-      const attachedNames = stagedFiles.map(f => f.name).join(', ');
-      displayText = text ? `${text}\n\n(Attached files: ${attachedNames})` : `(Attached files: ${attachedNames})`;
-    }
-    
-    // Check if user is explicitly asking to capture something
-    const captureMatch = text.match(/^capture:\s*(.*)/i);
-    if (captureMatch) {
-      const ideaId = addIdea(captureMatch[1], 'user');
-      setMessages(prev => [...prev, { 
-        id: Date.now().toString(), 
-        role: 'user', 
-        text: `Captured idea: ${captureMatch[1]}`, 
-        timestamp: new Date(),
-        capturedIdeaId: ideaId,
-        imageUrl: attachedImageUrls[0] // just attach the first one if multiple for the ui
-      }]);
-      setInputText('');
-      setStagedFiles([]);
-      return;
-    }
-
-    liveServiceRef.current.sendText(finalPayload);
-    
-    setMessages(prev => [...prev, { 
-      id: Date.now().toString(), 
-      role: 'user', 
-      text: displayText, 
-      timestamp: new Date(),
-      imageUrl: attachedImageUrls[0] // keep thumbnail context hook attached to log
-    }]);
-    
-    setInputText('');
-    setStagedFiles([]);
-  };
-
-  const exportChatToDocx = async () => {
-    if (messages.length === 0) return;
-    
-    const docChildren: any[] = [];
-    
-    // YYYYMMDD_HHMMSS formatting
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const dateComponent = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-    const timeComponent = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const fileName = `arc_chat_${dateComponent}_${timeComponent}.docx`;
-
-    // Add a title
-    docChildren.push(
-      new Paragraph({
-        children: [
-          new TextRun({ text: `ARC Chat Log - ${now.toLocaleString()}`, bold: true, size: 32, font: "Arial" }),
-        ],
-        spacing: { after: 400 }
-      })
-    );
-
-    for (const msg of messages) {
-      const isUser = msg.role === 'user';
-      const timeStr = msg.timestamp.toLocaleTimeString();
-      const dateStr = msg.timestamp.toLocaleDateString();
-      const name = isUser ? 'You' : 'ARC';
-      
-      docChildren.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: `${name} • ${dateStr} ${timeStr}`, bold: true, color: isUser ? "005bb5" : "333333", font: "Arial" })
-          ],
-          spacing: { before: 200, after: 100 }
-        })
-      );
-      
-      if (msg.imageUrl) {
-        try {
-          const mimeTypeMatch = msg.imageUrl.match(/^data:(image\/\w+);base64,/);
-          const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/png';
-          let imageType = 'png';
-          if (mimeType.includes('jpeg') || mimeType.includes('jpg')) imageType = 'jpg';
-          if (mimeType.includes('gif')) imageType = 'gif';
-
-          const response = await fetch(msg.imageUrl);
-          const arrayBuffer = await response.arrayBuffer();
-          
-          docChildren.push(
-            new Paragraph({
-              children: [
-                new ImageRun({
-                  data: arrayBuffer,
-                  type: imageType as any,
-                  transformation: {
-                    width: 320,
-                    height: 180
-                  }
-                })
-              ],
-              spacing: { after: 100 }
-            })
-          );
-        } catch (err) {
-          console.error("Error embedding image into docx", err);
-        }
-      }
-
-      if (msg.text) {
-        // MS Word XML does not allow raw newline \n characters in TextRun
-        // Split and map them to discrete runs with break, or multiple paragraphs
-        const lines = msg.text.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].trim() !== '') {
-            docChildren.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: lines[i], font: "Arial" })
-                ],
-                spacing: { after: 100 }
-              })
-            );
-          } else {
-             // add empty paragraph for spacing 
-             docChildren.push(new Paragraph({ children: [], spacing: { after: 100 } }));
-          }
-        }
-      }
-    }
-
-    const doc = new Document({
-      styles: {
-        default: {
-          document: {
-            run: {
-              font: "Arial",
-            },
-          },
-        },
-      },
-      sections: [
-        {
-          properties: {},
-          children: docChildren
-        }
-      ]
-    });
-
-    try {
-      const blob = await Packer.toBlob(doc);
-      saveAs(blob, fileName);
-    } catch (e) {
-      console.error(e);
-    }
   };
 
   const downloadIdeas = async () => {
@@ -1862,13 +1400,6 @@ export default function App() {
 
   const generateId = () => Date.now().toString() + Math.random().toString();
 
-  const toggleIdeaImageMirror = (ideaId: string) => {
-    setCapturedIdeas(prev => prev.map(idea => 
-      idea.id === ideaId ? { ...idea, isImageMirrored: !idea.isImageMirrored } : idea
-    ));
-    setActiveStickyMenuId(null);
-  };
-
   // Pick up a doc Claude dropped into inbox/doc.json (loaded once per drop).
   useEffect(() => {
     fetch('/api/inbox').then(r => r.ok ? r.json() : null).then(doc => {
@@ -1888,32 +1419,30 @@ export default function App() {
 
   // Mirror note additions/deletions to inbox/notes.json so Claude can read them back.
   // Only diffs are sent, so reloads and other tabs never overwrite the stored notes.
-  const syncedNotesRef = useRef<{ docTitle: string | null; ids: Set<string> } | null>(null);
+  // Every document load creates a new docChunks array, so a change of array means "new document":
+  // the notes list was cleared by the load, not by the user, and must not be deleted from the store.
+  const syncedNotesRef = useRef<{ doc: DocChunk[]; docTitle: string | null; ids: Set<string> } | null>(null);
   useEffect(() => {
     const ids = new Set(capturedIdeas.map(i => i.id));
     const prev = syncedNotesRef.current;
-    syncedNotesRef.current = { docTitle: loadedDocTitle, ids };
-    if (!prev || prev.docTitle !== loadedDocTitle) return; // first render or new doc: nothing changed by the user
+    syncedNotesRef.current = { doc: docChunks, docTitle: loadedDocTitle, ids };
+    if (!prev || prev.doc !== docChunks || prev.docTitle !== loadedDocTitle) return;
     const post = (url: string, body: any) => fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docTitle: loadedDocTitle, ...body })
     }).catch(() => {});
     capturedIdeas.filter(i => !prev.ids.has(i.id)).forEach(i =>
       post('/api/notes/add', { note: { id: i.id, section: i.section, text: i.text, source: i.source, timestamp: i.timestamp } }));
     prev.ids.forEach(id => { if (!ids.has(id)) post('/api/notes/delete', { id }); });
-  }, [capturedIdeas, loadedDocTitle]);
+  }, [capturedIdeas, loadedDocTitle, docChunks]);
 
-  const addIdea = (text: string, source: 'user' | 'arc', explicitImageUrl?: string, skipImage: boolean = false) => {
+  const addIdea = (text: string, source: 'user' | 'arc') => {
     const id = generateId();
-    
-    let imageUrl = explicitImageUrl;
-
     const activeChunk = docChunksRef.current[currentChunkIndexRef.current];
     setCapturedIdeas(prev => [...prev, {
       id,
       text,
       timestamp: new Date(),
       source,
-      imageUrl,
       chunkId: activeChunk?.id || 'gdoc-fallback',
       section: cleanSectionHeading(activeChunk?.section)
     }]);
@@ -1962,6 +1491,8 @@ export default function App() {
           docNode={<DocumentTextRenderer text={currentChunk.text} />}
           totalSections={docChunks.length}
           readMode={readMode}
+          errorMessage={micError}
+          onDismissError={() => setMicError(null)}
           onToggleReadMode={() => setReadMode(m => {
             const next = m === 'skim' ? 'full' : 'skim';
             readModeRef.current = next;
@@ -1993,13 +1524,11 @@ export default function App() {
           syncSuccessMessage={syncSuccessMessage}
           onDeleteComment={(id: string) => setCapturedIdeas(prev => prev.filter(c => c.id !== id))}
           onLoadNew={handleReloadClick}
-          onReload={() => {
-            // Re-loads document by fetching again
-            if (loadedDocId) {
-              loadGoogleDoc(`https://docs.google.com/document/d/${loadedDocId}`);
-              setIsMobileMenuOpen(false);
-            }
-          }}
+          // Only Google Docs can be re-fetched; uploaded and hand-off documents have no source to reload.
+          onReload={loadedDocId && authToken ? () => {
+            loadGoogleDoc(`https://docs.google.com/document/d/${loadedDocId}`);
+            setIsMobileMenuOpen(false);
+          } : undefined}
         />
       )}
 
