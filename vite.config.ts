@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import {defineConfig, loadEnv, type Plugin} from 'vite';
@@ -28,7 +29,21 @@ function openaiApi(env: Record<string, string>): Plugin {
     body: JSON.stringify(payload),
   });
 
+  // Local hand-off folder: Claude drops a doc in inbox/doc.json, ARC writes captured notes to inbox/notes.json.
+  const inboxDir = path.resolve(__dirname, 'inbox');
+
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    if (req.method === 'GET' && req.url === '/api/inbox') {
+      const file = path.join(inboxDir, 'doc.json');
+      if (!fs.existsSync(file)) return reply(res, 404, { error: 'No doc in inbox' });
+      return reply(res, 200, JSON.parse(fs.readFileSync(file, 'utf8')));
+    }
+    if (req.method === 'POST' && req.url === '/api/notes') {
+      const body = await readJson(req);
+      fs.mkdirSync(inboxDir, { recursive: true });
+      fs.writeFileSync(path.join(inboxDir, 'notes.json'), JSON.stringify({ ...body, savedAt: new Date().toISOString() }, null, 2));
+      return reply(res, 200, { ok: true });
+    }
     if (req.method !== 'POST' || !req.url?.startsWith('/api/')) return next();
     if (!apiKey) return reply(res, 500, { error: 'OPENAI_API_KEY is not set. Add it to .env and restart the dev server.' });
     const body = await readJson(req);

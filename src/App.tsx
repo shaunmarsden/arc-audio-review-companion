@@ -1811,6 +1811,35 @@ export default function App() {
     setActiveStickyMenuId(null);
   };
 
+  // Pick up a doc Claude dropped into inbox/doc.json (loaded once per drop).
+  useEffect(() => {
+    fetch('/api/inbox').then(r => r.ok ? r.json() : null).then(doc => {
+      if (!doc?.chunks?.length) return;
+      const marker = `${doc.title}|${doc.loadedAt}`;
+      if (window.localStorage.getItem('inbox_loaded') === marker) return;
+      window.localStorage.setItem('inbox_loaded', marker);
+      setDocChunks(doc.chunks);
+      setLoadedDocTitle(doc.title);
+      setLoadedDocId(null);
+      setCapturedIdeas([]);
+      isSourceOfSectionChangeRef.current = 'ui';
+      setCurrentChunkIndex(0);
+      setScreenState('player');
+    }).catch(() => {});
+  }, []);
+
+  // Mirror captured notes to inbox/notes.json so Claude can read them back.
+  useEffect(() => {
+    fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        docTitle: loadedDocTitle,
+        notes: capturedIdeas.map(i => ({ section: i.section, text: i.text, source: i.source, timestamp: i.timestamp }))
+      })
+    }).catch(() => {});
+  }, [capturedIdeas, loadedDocTitle]);
+
   const addIdea = (text: string, source: 'user' | 'arc', explicitImageUrl?: string, skipImage: boolean = false) => {
     const id = generateId();
     
