@@ -98,7 +98,7 @@ export class OpenAIRealtimeService {
           type: 'session.update',
           session: {
             type: 'realtime',
-            instructions: config.systemInstruction,
+            instructions: [data.voiceStyle && `## Voice\n${data.voiceStyle}`, config.systemInstruction].filter(Boolean).join('\n\n'),
             tools: TOOLS,
             tool_choice: 'auto'
           }

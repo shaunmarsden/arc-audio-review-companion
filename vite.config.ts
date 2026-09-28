@@ -10,6 +10,7 @@ function openaiApi(env: Record<string, string>): Plugin {
   const realtimeModel = env.OPENAI_REALTIME_MODEL || 'gpt-realtime';
   const visionModel = env.OPENAI_VISION_MODEL || 'gpt-5-mini';
   const defaultVoice = env.OPENAI_VOICE || 'marin';
+  const voiceStyle = env.OPENAI_VOICE_STYLE ?? 'Speak with a natural British English accent (standard Southern British / Received Pronunciation), using British pronunciation and vocabulary throughout. Keep this accent consistently for the whole session, including when reading document text aloud.';
 
   const readJson = (req: IncomingMessage) => new Promise<any>((resolve) => {
     let body = '';
@@ -54,7 +55,7 @@ function openaiApi(env: Record<string, string>): Plugin {
         });
         const data = await r.json();
         if (!r.ok) return reply(res, r.status, { error: data.error?.message || 'Failed to mint realtime token' });
-        return reply(res, 200, { value: data.value, model: realtimeModel });
+        return reply(res, 200, { value: data.value, model: realtimeModel, voiceStyle });
       }
 
       if (req.url === '/api/describe-image') {
