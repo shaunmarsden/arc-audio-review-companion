@@ -40,18 +40,45 @@ const IconMessage = (p: any) => <Icon {...p}><path d="M21 11.5a8.4 8.4 0 0 1-.9 
 const IconX = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Icon>;
 const IconArrowUp = (p: any) => <Icon {...p}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>;
 
-export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docError, hasFirebase }: any) {
+function UploadCard({ onUploadDoc, uploadLoading, uploadError }: any) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  return (
+    <Card>
+      <CardHeader icon={<IconDoc size={20} stroke={ARC.text} />} title="Upload a file" />
+      <p style={cardCopy}>Listen to a PDF, Word (.docx), Markdown or text file. Headings become sections.</p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.docx,.txt,.md,.markdown,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUploadDoc(file);
+          e.target.value = '';
+        }}
+      />
+      <button className="arc-btn arc-btn-outline" onClick={() => inputRef.current?.click()} disabled={uploadLoading} style={{ ...btnSecondary, width: '100%' }}>
+        {uploadLoading ? 'Reading file...' : 'Choose file'}
+      </button>
+      {uploadError && <div style={{ color: ARC.error, fontSize: 12, marginTop: 8 }}>{uploadError}</div>}
+    </Card>
+  );
+}
+
+export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docError, hasFirebase, onUploadDoc, uploadLoading, uploadError }: any) {
   return (
     <Screen>
       <div style={{ padding: '24px 20px 24px', display: 'flex', flexDirection: 'column', gap: 24, flex: 1, overflowY: 'auto' }} className="arc-scroll">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 28, alignItems: 'flex-start' }}>
           <ArcLogo height={72} />
           <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: ARC.muted, maxWidth: 320 }}>
-            Listen to your Google Docs and add comments hands free.
+            Listen to your documents and add comments hands free.
           </p>
         </div>
 
-        <Card>
+        <UploadCard onUploadDoc={onUploadDoc} uploadLoading={uploadLoading} uploadError={uploadError} />
+
+        {hasFirebase && <Card>
           <CardHeader icon={<IconDoc size={20} stroke={ARC.text} />} title="Google doc loader" />
           <p style={cardCopy}>Connect your Google account securely to load and read private or shared Google docs directly.</p>
           
@@ -65,7 +92,7 @@ export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docEr
           </div>
 
           {docError && <div style={{ color: ARC.error, fontSize: 12, marginTop: 8 }}>{docError}</div>}
-        </Card>
+        </Card>}
 
         <Card>
           <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: ARC.accentText, marginBottom: 8 }}>
@@ -82,7 +109,7 @@ export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docEr
   );
 }
 
-export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad, docLoading, docError, docUrlInput, setDocUrlInput }: any) {
+export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad, docLoading, docError, docUrlInput, setDocUrlInput, onUploadDoc, uploadLoading, uploadError }: any) {
   return (
     <Screen>
       <div style={{ padding: '24px 20px 24px', display: 'flex', flexDirection: 'column', gap: 24, flex: 1, overflowY: 'auto' }} className="arc-scroll">
@@ -131,6 +158,8 @@ export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad
           </button>
         </Card>
 
+        <UploadCard onUploadDoc={onUploadDoc} uploadLoading={uploadLoading} uploadError={uploadError} />
+
         <Card>
           <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: ARC.accentText, marginBottom: 8 }}>
             Default resource
@@ -178,7 +207,7 @@ function PlaybackHeader({ onMenu, menuOpen, docTitle, buttonRef }: any) {
   );
 }
 
-function CommentsPanel({ isOpen, comments, onClose, serifFamily, onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment }: any) {
+function CommentsPanel({ isOpen, comments, onClose, serifFamily, onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment, canSyncToDoc = true }: any) {
   const panelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -320,7 +349,7 @@ function CommentsPanel({ isOpen, comments, onClose, serifFamily, onSync, isSynci
           ...btnPrimary, marginTop: 14, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           opacity: isSyncing || comments.length === 0 ? 0.5 : 1
         }}>
-          {isSyncing ? 'Syncing...' : `Sync comments (${comments.filter((c:any) => !c.synced).length})`}
+          {isSyncing ? 'Syncing...' : canSyncToDoc ? `Sync comments (${comments.filter((c:any) => !c.synced).length})` : `Download comments (${comments.length})`}
           {!isSyncing && <IconArrowUp size={16} />}
         </button>
       </motion.div>
@@ -473,7 +502,7 @@ export function PlaybackScreen({
   sectionTitle, docNode, totalSections, activeSection, scrubPage = 0, docTitle, micIndicator, 
   comments, onToggleComments, onTogglePlay, onToggleMute, onToggleMenu,
   onPrevChunk, onNextChunk, onJumpChunk, onPrevWindow, onNextWindow,
-  onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment,
+  onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment, canSyncToDoc,
   onLoadNew, onReload, readMode, onToggleReadMode
 }: any) {
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -540,7 +569,7 @@ export function PlaybackScreen({
             </div>
           </div>
 
-            <CommentsPanel isOpen={commentsOpen} comments={comments} serifFamily={serif} onClose={onToggleComments} onSync={onSync} isSyncing={isSyncing} syncError={syncError} syncSuccessMessage={syncSuccessMessage} onDeleteComment={onDeleteComment} />
+            <CommentsPanel isOpen={commentsOpen} comments={comments} serifFamily={serif} onClose={onToggleComments} onSync={onSync} isSyncing={isSyncing} syncError={syncError} syncSuccessMessage={syncSuccessMessage} onDeleteComment={onDeleteComment} canSyncToDoc={canSyncToDoc} />
         </div>
 
         {/* Bottom controls container */}

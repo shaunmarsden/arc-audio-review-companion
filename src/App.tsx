@@ -44,6 +44,7 @@ import systemInstructionMarkdown from './prompts/arc_system_instruction.md?raw';
 // Import custom UI components
 import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen } from './components/ArcScreens';
 import { floatTo16BitPCM, arrayBufferToBase64 } from './lib/audioUtils';
+import { fileToChunks } from './lib/fileToChunks';
 
 import * as mammoth from 'mammoth/mammoth.browser';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -555,6 +556,37 @@ export default function App() {
     setCurrentChunkIndex(0);
     isSourceOfSectionChangeRef.current = 'ui';
     setScreenState('player');
+  };
+
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const loadUploadedDoc = async (file: File) => {
+    setUploadLoading(true);
+    setUploadError(null);
+    try {
+      const { title, chunks } = await fileToChunks(file);
+      playingSourcesRef.current.forEach(source => { try { source.stop(); } catch(e) {} });
+      playingSourcesRef.current = [];
+      hasPlayedAudioForSectionRef.current = false;
+      isTurnCompleteRef.current = false;
+      wasInterruptedRef.current = false;
+      interactionsOccurredForSectionRef.current = false;
+      nextPlayTimeRef.current = audioContextRef.current ? audioContextRef.current.currentTime : 0;
+
+      setDocChunks(chunks);
+      setLoadedDocTitle(title);
+      setLoadedDocId(null);
+      setCapturedIdeas([]);
+      setCurrentChunkIndex(0);
+      isSourceOfSectionChangeRef.current = 'ui';
+      setScreenState('player');
+    } catch (err: any) {
+      console.error('Failed to read uploaded file:', err);
+      setUploadError(err?.message || 'Could not read that file.');
+    } finally {
+      setUploadLoading(false);
+    }
   };
 
   const handleReloadClick = () => {
@@ -1729,12 +1761,14 @@ export default function App() {
     const pad = (n: number) => n.toString().padStart(2, '0');
     const dateComponent = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
     const timeComponent = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const fileName = `arc_notes_${dateComponent}_${timeComponent}.docx`;
+    const safeTitle = (loadedDocTitle || 'document').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_').slice(0, 60);
+    const fileName = `ARC_comments_${safeTitle}_${dateComponent}_${timeComponent}.docx`;
 
     docChildren.push(
       new Paragraph({
         children: [
-          new TextRun({ text: `Arc Saved Notes - ${now.toLocaleString()}`, bold: true, size: 32, font: "Arial" }),
+          new TextRun({ text: `ARC comments: ${loadedDocTitle || 'Untitled document'}`, bold: true, size: 32, font: "Arial" }),
+          new TextRun({ text: `Exported ${now.toLocaleString()}`, break: 1, size: 20, color: "666666", font: "Arial" }),
         ],
         spacing: { after: 400 }
       })
@@ -1748,7 +1782,7 @@ export default function App() {
       docChildren.push(
         new Paragraph({
           children: [
-            new TextRun({ text: `${name} • ${dateStr} ${timeStr}`, bold: true, color: idea.source === 'user' ? "005bb5" : "333333", font: "Arial" })
+            new TextRun({ text: `${idea.section ? `${idea.section} • ` : ''}${name} • ${dateStr} ${timeStr}`, bold: true, color: idea.source === 'user' ? "005bb5" : "333333", font: "Arial" })
           ],
           spacing: { before: 200, after: 100 }
         })
@@ -1895,6 +1929,9 @@ export default function App() {
           isLoggingIn={isLoggingIn}
           docError={docError}
           hasFirebase={hasFirebaseConfig}
+          onUploadDoc={loadUploadedDoc}
+          uploadLoading={uploadLoading}
+          uploadError={uploadError}
         />
       )}
 
@@ -1908,6 +1945,9 @@ export default function App() {
           docError={docError}
           docUrlInput={docUrlInput}
           setDocUrlInput={setDocUrlInput}
+          onUploadDoc={loadUploadedDoc}
+          uploadLoading={uploadLoading}
+          uploadError={uploadError}
         />
       )}
 
@@ -1945,7 +1985,9 @@ export default function App() {
           onJumpChunk={jumpToSection}
           onPrevWindow={() => setScrubPage(prev => Math.max(0, prev - 1))}
           onNextWindow={() => setScrubPage(prev => Math.min(Math.ceil(docChunks.length / 10) - 1, prev + 1))}
-          onSync={syncCommentsToDoc}
+          // Without a connected Google Doc, the panel button exports comments as a Word file instead.
+          canSyncToDoc={!!(authToken && loadedDocId)}
+          onSync={authToken && loadedDocId ? syncCommentsToDoc : downloadIdeas}
           isSyncing={isSyncing}
           syncError={syncError}
           syncSuccessMessage={syncSuccessMessage}
