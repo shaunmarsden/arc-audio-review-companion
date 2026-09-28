@@ -4,7 +4,7 @@ import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
 import systemInstructionMarkdown from './prompts/arc_system_instruction.md?raw';
 // Import custom UI components
-import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen, UnlockScreen, ApiKeyScreen } from './components/ArcScreens';
+import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen, UnlockScreen, ApiKeyScreen, FeedbackDialog } from './components/ArcScreens';
 import { floatTo16BitPCM, arrayBufferToBase64 } from './lib/audioUtils';
 import { fileToChunks } from './lib/fileToChunks';
 import { IS_HOSTED, describeImage, getStoredApiKey, forgetApiKey } from './lib/backend';
@@ -429,6 +429,8 @@ export default function App() {
   // Hosted build: the visitor must add their own OpenAI key before anything else.
   const [needsApiKey, setNeedsApiKey] = useState(() => IS_HOSTED && !getStoredApiKey());
   const [changingApiKey, setChangingApiKey] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const openFeedback = () => setShowFeedback(true);
   useEffect(() => {
     if (IS_HOSTED) return; // no local server to unlock
     fetch('/api/status').then(r => r.ok ? r.json() : null).then(d => setApiLocked(!!d?.locked)).catch(() => {});
@@ -1461,7 +1463,9 @@ export default function App() {
   if (needsApiKey || changingApiKey) {
     return (
       <div className="flex justify-center w-full h-screen overflow-hidden text-gray-900 dark:text-gray-100" style={{ background: '#ebe9e5' }}>
+        <FeedbackDialog isOpen={showFeedback} onClose={() => setShowFeedback(false)} />
         <ApiKeyScreen
+          onFeedback={openFeedback}
           onSaved={() => { setNeedsApiKey(false); setChangingApiKey(false); setMicError(null); }}
           onCancel={changingApiKey && !needsApiKey ? () => setChangingApiKey(false) : undefined}
           onForget={changingApiKey && !needsApiKey ? () => { forgetApiKey(); setChangingApiKey(false); setNeedsApiKey(true); } : undefined}
@@ -1487,6 +1491,7 @@ export default function App() {
           isLoggingIn={isLoggingIn}
           docError={docError}
           hasFirebase={hasFirebaseConfig}
+          onFeedback={openFeedback}
           onUploadDoc={loadUploadedDoc}
           uploadLoading={uploadLoading}
           uploadError={uploadError}
@@ -1503,6 +1508,7 @@ export default function App() {
           docError={docError}
           docUrlInput={docUrlInput}
           setDocUrlInput={setDocUrlInput}
+          onFeedback={openFeedback}
           onUploadDoc={loadUploadedDoc}
           uploadLoading={uploadLoading}
           uploadError={uploadError}
@@ -1520,6 +1526,7 @@ export default function App() {
           docNode={<DocumentTextRenderer text={currentChunk.text} />}
           totalSections={docChunks.length}
           readMode={readMode}
+          onFeedback={openFeedback}
           onChangeApiKey={IS_HOSTED ? () => { stopLiveSession(); setChangingApiKey(true); } : undefined}
           errorMessage={micError}
           onDismissError={() => setMicError(null)}
@@ -1562,6 +1569,7 @@ export default function App() {
         />
       )}
 
+      <FeedbackDialog isOpen={showFeedback} onClose={() => setShowFeedback(false)} context={{ readMode, lastError: micError }} />
       <ConfirmDialog 
         isOpen={showConfirmReload} 
         onClose={() => setShowConfirmReload(false)} 

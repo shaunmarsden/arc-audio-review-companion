@@ -161,6 +161,16 @@ npm run build:web  # hosted build, as deployed to GitHub Pages
 
 The checks run on every push via GitHub Actions, and each push to `main` redeploys the hosted version.
 
+## Feedback
+
+Found a problem or have an idea? Use **Give feedback** in the app (in the menu, or at the bottom of the start screen), or go straight to one of these:
+
+- [Something went wrong](https://github.com/shaunmarsden/arc-audio-review-companion/issues/new?template=bug_report.yml)
+- [Suggest an idea](https://github.com/shaunmarsden/arc-audio-review-companion/issues/new?template=idea.yml)
+- [Share general feedback](https://github.com/shaunmarsden/arc-audio-review-companion/issues/new?template=feedback.yml)
+
+These are public GitHub pages, and posting needs a free GitHub account. From inside the app, your browser and ARC version are filled in for you. Please don't paste your API key or private document contents.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE). Original work by [heen2001](https://github.com/heen2001/arc-audio-review-companion).

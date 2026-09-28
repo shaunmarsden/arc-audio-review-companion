@@ -258,6 +258,7 @@ export default defineConfig(({mode, command}) => {
   return {
     base: hosted ? (env.ARC_BASE_PATH || '/arc-audio-review-companion/') : '/',
     define: {
+      __APP_VERSION__: JSON.stringify(JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version),
       'import.meta.env.VITE_HOSTED': JSON.stringify(hosted ? 'true' : 'false'),
       // The hosted build never uses Firebase sign-in, so none of that config is bundled.
       ...(hosted ? Object.fromEntries(Object.keys(env).filter(k => k.startsWith('VITE_FIREBASE_')).map(k => [`import.meta.env.${k}`, '""'])) : {}),

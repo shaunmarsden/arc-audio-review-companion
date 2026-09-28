@@ -1,0 +1,52 @@
+name: Something went wrong
+description: ARC didn't work the way you expected.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. **This page is public**, so please don't paste your OpenAI API key or the contents of a private document.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what you expected to happen instead.
+      placeholder: e.g. I said "add a comment" but ARC carried on reading and nothing was saved.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What were you doing just before?
+      description: The steps that led to it, if you can remember them.
+      placeholder: |
+        1. Uploaded a Word document
+        2. Pressed play
+        3. Interrupted during the second section
+  - type: textarea
+    id: error
+    attributes:
+      label: Any error message?
+      description: Copy the red message shown above the controls, if there was one.
+  - type: dropdown
+    id: version
+    attributes:
+      label: Which version were you using?
+      options:
+        - The website (shaunmarsden.github.io)
+        - Running it myself (npm run dev)
+        - Running it myself in phone mode (npm run dev:phone)
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: e.g. iPhone 15, Safari / MacBook, Chrome
+  - type: textarea
+    id: environment
+    attributes:
+      label: Technical details
+      description: Filled in automatically when you use "Give feedback" in the app. Leave as is.
+      render: text

@@ -1,0 +1,38 @@
+name: General feedback
+description: What you liked, what you didn't, or how you're using ARC.
+title: "[Feedback] "
+labels: [feedback]
+body:
+  - type: markdown
+    attributes:
+      value: This page is public, so please don't include private document contents.
+  - type: dropdown
+    id: rating
+    attributes:
+      label: How useful was ARC for you?
+      options:
+        - Very useful
+        - Somewhat useful
+        - Not very useful
+        - Couldn't get it working
+    validations:
+      required: true
+  - type: textarea
+    id: liked
+    attributes:
+      label: What worked well?
+  - type: textarea
+    id: improve
+    attributes:
+      label: What would you change?
+  - type: input
+    id: use
+    attributes:
+      label: What did you use it to review?
+      placeholder: e.g. a proposal, meeting notes, my thesis chapter
+  - type: textarea
+    id: environment
+    attributes:
+      label: Technical details
+      description: Filled in automatically when you use "Give feedback" in the app. Leave as is.
+      render: text

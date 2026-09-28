@@ -1,0 +1,26 @@
+name: Idea or feature request
+description: Something that would make ARC more useful.
+title: "[Idea] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: This page is public, so please don't include private document contents.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like ARC to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+      description: What you're trying to get done, and what gets in the way today.
+      placeholder: e.g. I review long contracts and want to jump straight to the clauses I care about.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Technical details
+      description: Filled in automatically when you use "Give feedback" in the app. Leave as is.
+      render: text

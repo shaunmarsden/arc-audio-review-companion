@@ -1,6 +1,7 @@
 import React from 'react';
 import { MicButton } from './MicButton';
 import { validateApiKey, storeApiKey } from '../lib/backend';
+import { feedbackUrl, type FeedbackKind } from '../lib/feedback';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ARC, 
@@ -40,8 +41,59 @@ const IconMessage = (p: any) => <Icon {...p}><path d="M21 11.5a8.4 8.4 0 0 1-.9 
 const IconX = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Icon>;
 const IconArrowUp = (p: any) => <Icon {...p}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>;
 
+// "Give feedback": three GitHub issue forms, opened in a new tab with technical details pre-filled.
+export function FeedbackDialog({ isOpen, onClose, context }: { isOpen: boolean; onClose: () => void; context?: { readMode?: string; lastError?: string | null } }) {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+  if (!isOpen) return null;
+  const option = (kind: FeedbackKind, title: string, desc: string) => (
+    <a
+      href={feedbackUrl(kind, context)}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClose}
+      className="arc-btn arc-btn-outline"
+      style={{ ...btnSecondary, display: 'block', textAlign: 'left', textDecoration: 'none', padding: '12px 14px', height: 'auto', width: '100%', boxSizing: 'border-box' }}
+    >
+      <div style={{ fontSize: 14, fontWeight: 500, color: ARC.text }}>{title}</div>
+      <div style={{ fontSize: 12, color: ARC.muted, marginTop: 2, fontWeight: 400 }}>{desc}</div>
+    </a>
+  );
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="arc-feedback-title" onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(26,26,26,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: ARC.surface, borderRadius: 16, padding: 20, boxShadow: '0 12px 40px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div id="arc-feedback-title" style={{ fontSize: 17, fontWeight: 500, color: ARC.text }}>Give feedback</div>
+        {option('bug', 'Something went wrong', "Tell us what happened and we'll look into it.")}
+        {option('idea', 'Suggest an idea', 'Something that would make ARC more useful.')}
+        {option('feedback', 'Share general feedback', 'What worked, what didn’t, how you use it.')}
+        <p style={{ ...cardCopy, fontSize: 12, margin: '4px 0 0' }}>
+          Opens a public page on GitHub (a free account is needed to post). Your browser and ARC version are filled in for you. Document text, comments and your API key are never included.
+        </p>
+        <button type="button" className="arc-btn arc-btn-ghost" onClick={onClose} style={{ ...btnGhost, width: '100%' }}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+export function FeedbackFooter({ onFeedback }: { onFeedback?: () => void }) {
+  if (!onFeedback) return null;
+  return (
+    <div style={{ textAlign: 'center', fontSize: 12, color: ARC.muted, paddingBottom: 8 }}>
+      Problems or ideas?{' '}
+      <button type="button" onClick={onFeedback} style={{ background: 'none', border: 'none', padding: 0, color: ARC.accentText, textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>
+        Give feedback
+      </button>
+    </div>
+  );
+}
+
 // Hosted build only: ARC runs entirely in the browser on the visitor's own OpenAI key.
-export function ApiKeyScreen({ onSaved, onCancel, onForget }: { onSaved: () => void; onCancel?: () => void; onForget?: () => void }) {
+export function ApiKeyScreen({ onSaved, onCancel, onForget, onFeedback }: { onSaved: () => void; onCancel?: () => void; onForget?: () => void; onFeedback?: () => void }) {
   const [key, setKey] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -129,6 +181,7 @@ export function ApiKeyScreen({ onSaved, onCancel, onForget }: { onSaved: () => v
             Your key stays in this browser on this device and is only ever sent to OpenAI. Your documents and voice go to OpenAI to run the session, and usage is billed to your OpenAI account. You can remove the key any time from the menu.
           </p>
         </Card>
+        <FeedbackFooter onFeedback={onFeedback} />
       </div>
     </Screen>
   );
@@ -216,7 +269,7 @@ function UploadCard({ onUploadDoc, uploadLoading, uploadError }: any) {
   );
 }
 
-export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docError, hasFirebase, onUploadDoc, uploadLoading, uploadError }: any) {
+export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docError, hasFirebase, onUploadDoc, uploadLoading, uploadError, onFeedback }: any) {
   return (
     <Screen>
       <div style={{ padding: '24px 20px 24px', display: 'flex', flexDirection: 'column', gap: 24, flex: 1, overflowY: 'auto' }} className="arc-scroll">
@@ -255,12 +308,13 @@ export function LoadScreenSignedOut({ onSignIn, onSampleLoad, isLoggingIn, docEr
             Open sample  →
           </button>
         </Card>
+        <FeedbackFooter onFeedback={onFeedback} />
       </div>
     </Screen>
   );
 }
 
-export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad, docLoading, docError, docUrlInput, setDocUrlInput, onUploadDoc, uploadLoading, uploadError }: any) {
+export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad, docLoading, docError, docUrlInput, setDocUrlInput, onUploadDoc, uploadLoading, uploadError, onFeedback }: any) {
   return (
     <Screen>
       <div style={{ padding: '24px 20px 24px', display: 'flex', flexDirection: 'column', gap: 24, flex: 1, overflowY: 'auto' }} className="arc-scroll">
@@ -321,6 +375,7 @@ export function LoadScreenSignedIn({ user, onDisconnect, onLoadDoc, onSampleLoad
             Open sample  →
           </button>
         </Card>
+        <FeedbackFooter onFeedback={onFeedback} />
       </div>
     </Screen>
   );
@@ -654,7 +709,7 @@ export function PlaybackScreen({
   comments, onToggleComments, onTogglePlay, onToggleMute, onToggleMenu,
   onPrevChunk, onNextChunk, onJumpChunk, onPrevWindow, onNextWindow,
   onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment, canSyncToDoc,
-  onLoadNew, onReload, readMode, onToggleReadMode, errorMessage, onDismissError, onChangeApiKey
+  onLoadNew, onReload, readMode, onToggleReadMode, errorMessage, onDismissError, onChangeApiKey, onFeedback
 }: any) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -772,6 +827,7 @@ export function PlaybackScreen({
             style={{ position: 'absolute', top: 60, right: 14, background: ARC.surface2, border: `1px solid ${ARC.border}`, borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06)', padding: 6, minWidth: 200, zIndex: 30 }}
           >
             <MenuItem icon={<IconDoc size={16} stroke={ARC.muted} />} label="Load new document" onClick={() => { onLoadNew(); onToggleMenu(); }} />
+            {onFeedback && <MenuItem icon={<IconDoc size={16} stroke={ARC.muted} />} label="Give feedback" onClick={() => { onFeedback(); onToggleMenu(); }} />}
             {onChangeApiKey && <MenuItem icon={<IconCycle size={16} stroke={ARC.muted} />} label="Change OpenAI key" onClick={() => { onChangeApiKey(); onToggleMenu(); }} />}
             {onReload && <MenuItem icon={<IconCycle size={16} stroke={ARC.muted} />} label="Reload document" onClick={() => { onReload(); onToggleMenu(); }} />}
             <div style={{ ...embossedDivider, margin: '4px 6px' }} />
