@@ -6,3 +6,8 @@ declare module '*?raw' {
 interface Window {
   lastFrameLogTime?: number;
 }
+
+declare module '*.svg' {
+  const src: string;
+  export default src;
+}

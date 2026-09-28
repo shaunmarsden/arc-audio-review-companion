@@ -37,8 +37,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { GoogleGenAI } from "@google/genai";
-import { GeminiLiveService } from './services/geminiLiveService';
+import { OpenAIRealtimeService, INPUT_SAMPLE_RATE } from './services/openaiRealtimeService';
 import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
 import systemInstructionMarkdown from './prompts/arc_system_instruction.md?raw';
@@ -344,38 +343,22 @@ function DocumentTextRenderer({ text }: { text: string }) {
 }
 
 async function generateImageAltText(imageUrl: string, title?: string, description?: string): Promise<string> {
-  const env = (import.meta as any).env || {};
-  let apiKey = (process.env as any).GEMINI_API_KEY || (process.env as any).GOOGLE_API_KEY || env.VITE_GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    apiKey = (process.env as any).API_KEY;
-  }
-  
   const ctxStr = [title, description].filter(Boolean).join(' - ');
 
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    return `*[Image/Object: ${ctxStr || 'Embedded Image'}]*`;
-  }
-
   try {
-    const ai = new GoogleGenAI({ apiKey: apiKey || "" });
     const response = await fetch(imageUrl);
     const blob = await response.blob();
     const buffer = await blob.arrayBuffer();
     const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-    
-    const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-             { text: 'You are an AI assistant generating alt text for a document. Summarize this image or chart concisely (1-2 sentences max) so a listener understands what it shows. Clarify that it is an image/object.' },
-             { inlineData: { mimeType: blob.type || 'image/jpeg', data: base64 } }
-          ]
-        }
-      ]
+
+    const res = await fetch('/api/describe-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl: `data:${blob.type || 'image/jpeg'};base64,${base64}` })
     });
-    
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error);
+
     const summary = result.text?.trim() || ctxStr || 'Embedded visual content';
     return `*[Image/Object Summary: ${summary}]*`;
   } catch (error) {
@@ -877,7 +860,7 @@ export default function App() {
   
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [inputText, setInputText] = useState('');
-  const liveServiceRef = useRef<GeminiLiveService | null>(null);
+  const liveServiceRef = useRef<OpenAIRealtimeService | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextPlayTimeRef = useRef<number>(0);
   const playingSourcesRef = useRef<AudioBufferSourceNode[]>([]);
@@ -1184,7 +1167,7 @@ export default function App() {
       micStreamRef.current = micStream;
       setIsMuted(false);
 
-      const liveService = new GeminiLiveService();
+      const liveService = new OpenAIRealtimeService();
       liveServiceRef.current = liveService;
 
       await liveService.connect({
@@ -1341,9 +1324,6 @@ export default function App() {
         }
       }, {
         systemInstruction: `${systemInstructionMarkdown}\n\n## Current Document Structure\nYou are currently reviewing the document: "${loadedDocTitle || 'Default Document'}" which contains exactly ${docChunks.length} sections.\nThe active sections that correspond to the available indexes for the \`change_section\` tool are:\n${docChunks.map((chunk, index) => `- **UI Section ${index + 1}** (Index ${index}): "${chunk.section}"`).join('\n')}\n\nCRITICAL: Use these exact indexes and titles when updating active sections. If the user asks you to skip forward, go back or go to a section, select the correct 0-based index from this list.`,
-        thinkingLevel: 'HIGH',
-        temperature: 1.0,
-        voiceName: 'Aoede'
       });
 
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1403,7 +1383,7 @@ export default function App() {
           const threshold = isArcCurrentlySpeaking ? 0.012 : 0.0;
           
           if (rms >= threshold) {
-            const resampledData = resample(inputData, 16000, audioContext.sampleRate);
+            const resampledData = resample(inputData, INPUT_SAMPLE_RATE, audioContext.sampleRate);
             const pcmBuffer = floatTo16BitPCM(resampledData);
             const base64 = arrayBufferToBase64(pcmBuffer);
             liveService.sendAudio(base64);

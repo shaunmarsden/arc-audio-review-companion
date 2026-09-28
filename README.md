@@ -1,5 +1,7 @@
 # Audio Review Companion (ARC)
 
+> **Fork note:** this fork replaces the Gemini Live voice layer with the **OpenAI Realtime API** (`gpt-realtime`) and image alt-text with the OpenAI Responses API. The API key stays server-side: the Vite dev server mints short-lived Realtime tokens at `/api/realtime-session`. Upstream: [heen2001/arc-audio-review-companion](https://github.com/heen2001/arc-audio-review-companion).
+
 **Audio Review Companion (ARC)** is an voice-first document review companion designed to read Google documents aloud, capture verbal comments, and seamlessly synchronize feedback back to the documents. Ideal for agents to act on these comments.  
 
 By leveraging real-time voice and multimodal AI via **Google AI Studio**, ARC acts as an active, hands-free reviewer. It follows the structure of your documents while adapting to verbal instructions—allowing you to comment, pause, request re-reads of specific sentences, or resume flows organically.
@@ -34,9 +36,9 @@ To build upon or customize ARC:
    ```bash
    npm install
    ```
-4. Create a `.env` file in the root directory (using `.env.example` as a template) and add your [Google Gemini API Key](https://aistudio.google.com/) and optional your own **Firebase Configurations** to enable user authentication persistence:
+4. Create a `.env` file in the root directory (using `.env.example` as a template) and add your [OpenAI API key](https://platform.openai.com/api-keys). Firebase is optional and only needed to load and comment on Google Docs; without it you can use the sample document or upload PDF/DOCX/TXT files:
    ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
+   OPENAI_API_KEY=your_openai_api_key_here
 
    # Firebase Setup (optional for local deployment)
    VITE_FIREBASE_API_KEY=your_firebase_api_key
@@ -45,7 +47,6 @@ To build upon or customize ARC:
    VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
    VITE_FIREBASE_MESSAGING_SENDER_ID=your_id
    VITE_FIREBASE_APP_ID=your_app_id
-   VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
    ```
 5. Run the local development server:
    ```bash
