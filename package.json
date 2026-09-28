@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "vite --port=3000",
+    "dev:phone": "vite --port=3443 --host 0.0.0.0 --mode phone",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -34,7 +35,10 @@
   "devDependencies": {
     "@types/file-saver": "^2.0.7",
     "@types/node": "^22.14.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "jsdom": "^26.1.0",
+    "qrcode-terminal": "^0.12.0",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",

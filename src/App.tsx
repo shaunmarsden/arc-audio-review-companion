@@ -4,7 +4,7 @@ import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
 import systemInstructionMarkdown from './prompts/arc_system_instruction.md?raw';
 // Import custom UI components
-import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen } from './components/ArcScreens';
+import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen, UnlockScreen } from './components/ArcScreens';
 import { floatTo16BitPCM, arrayBufferToBase64 } from './lib/audioUtils';
 import { fileToChunks } from './lib/fileToChunks';
 
@@ -430,6 +430,11 @@ async function parseGoogleDoc(doc: any): Promise<DocChunk[]> {
 import { ConfirmDialog } from './components/ConfirmDialog';
 
 export default function App() {
+  // In phone mode, other devices must unlock the local API with a passcode first.
+  const [apiLocked, setApiLocked] = useState(false);
+  useEffect(() => {
+    fetch('/api/status').then(r => r.ok ? r.json() : null).then(d => setApiLocked(!!d?.locked)).catch(() => {});
+  }, []);
   const [screenState, setScreenState] = useState<'start' | 'player'>(() => {
     if (typeof window === 'undefined') return 'start';
     const saved = window.localStorage.getItem('review_session');
@@ -826,6 +831,8 @@ export default function App() {
   const nextPlayTimeRef = useRef<number>(0);
   const playingSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const micStreamRef = useRef<MediaStream | null>(null);
+  // Keeps a phone's screen on during a session; a locked screen suspends the audio.
+  const wakeLockRef = useRef<any>(null);
   const audioWorkletRef = useRef<ScriptProcessorNode | null>(null);
   const hasPlayedAudioForSectionRef = useRef<boolean>(false);
   const isTurnCompleteRef = useRef<boolean>(false);
@@ -1246,6 +1253,7 @@ export default function App() {
       silentGain.connect(audioContext.destination);
 
       setIsLiveActive(true);
+      try { wakeLockRef.current = await (navigator as any).wakeLock?.request('screen'); } catch { /* optional */ }
       console.debug("[ARC]", "Session active");
 
     } catch (err) {
@@ -1268,6 +1276,8 @@ export default function App() {
 
   // Releases the mic, audio graph and playback. Safe to call more than once.
   const teardownAudio = () => {
+    wakeLockRef.current?.release?.().catch(() => {});
+    wakeLockRef.current = null;
     if (audioWorkletRef.current) { audioWorkletRef.current.onaudioprocess = null; audioWorkletRef.current.disconnect(); }
     audioWorkletRef.current = null;
     if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
@@ -1448,6 +1458,14 @@ export default function App() {
     }]);
     return id;
   };
+
+  if (apiLocked) {
+    return (
+      <div className="flex justify-center w-full h-screen overflow-hidden text-gray-900 dark:text-gray-100" style={{ background: '#ebe9e5' }}>
+        <UnlockScreen />
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-center w-full h-screen overflow-hidden text-gray-900 dark:text-gray-100" style={{ background: '#ebe9e5' }}>

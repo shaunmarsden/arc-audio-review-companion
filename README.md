@@ -2,9 +2,9 @@
 
 ARC reads your documents aloud and lets you review them by voice. You interrupt whenever you like: to leave a comment, ask what a paragraph means, jump to another section, or have something re-read. Your spoken comments are saved against the section they refer to.
 
-It's built for reviewing work without staring at it: sit back, put headphones on, and listen.
+It's built for reviewing work without staring at it: put headphones on and listen, at your desk or on your phone around the house or office.
 
-**What you need:** a laptop or desktop, Node.js 20+, and an OpenAI API key. ARC is tested in Chrome; Edge, Firefox and Safari should work but haven't been tested yet. ARC runs on your own computer and is used from the same computer. It doesn't work from a phone yet, because browsers only allow microphone access on `localhost` or over HTTPS.
+**What you need:** a laptop or desktop to run it on, Node.js 20+, and an OpenAI API key. ARC runs on your computer; you use it in a browser on that computer, or on a phone on the same Wi-Fi ([phone mode](#use-it-from-your-phone)). It's tested in desktop Chrome; Edge, Firefox, Safari and mobile browsers should work but haven't been tested as thoroughly.
 
 > This is a fork of [heen2001/arc-audio-review-companion](https://github.com/heen2001/arc-audio-review-companion), which runs on Google Gemini. This version runs on the **OpenAI Realtime API** and adds file upload, skim mode and a British English voice. Credit for the original design and app goes to the upstream author.
 
@@ -34,6 +34,26 @@ Open **http://localhost:3000**, choose a file (or open the sample), press play a
 Headphones help. Without them ARC can hear itself through your speakers and stop mid-sentence.
 
 If something goes wrong (no key, a rejected key, no credit, the microphone blocked), ARC shows a message above the controls explaining what to do.
+
+### Use it from your phone
+
+```bash
+npm run dev:phone
+```
+
+The terminal shows a link, a QR code and a passcode. On a phone connected to the **same Wi-Fi**:
+
+1. Open the link or scan the QR code.
+2. The browser warns that the connection isn't private. That's because ARC uses a self-signed certificate (browsers only allow the microphone over HTTPS). Choose **Advanced → Proceed** (Chrome) or **Show Details → visit this website** (Safari).
+3. Enter the passcode from the terminal, then use ARC as normal.
+
+Good to know:
+
+- Your computer has to stay on and running ARC, and your Mac or PC may ask whether to allow incoming connections: allow it.
+- ARC asks the phone to keep its screen on during a session (most current mobile browsers support this). If the screen does lock, the audio stops; press play to carry on.
+- The passcode changes every time you start phone mode, and restarting signs out every phone. Five wrong guesses lock that device out for five minutes. To use a fixed passcode, set `ARC_PASSCODE` (6 to 12 digits) in `.env`.
+- The computer running ARC never needs the passcode.
+- Only use phone mode on networks you trust, like home or office Wi-Fi.
 
 ---
 
@@ -73,12 +93,14 @@ Everything goes in `.env`. Only `OPENAI_API_KEY` is required.
 | `OPENAI_VOICE` | `marin` | Base voice (others include `cedar`, `sage`, `alloy`) |
 | `OPENAI_VOICE_STYLE` | British English accent | Accent and style instruction. Set it empty to use the voice's natural accent. |
 | `OPENAI_VISION_MODEL` | `gpt-5-mini` | Describes images found in Google Docs |
+| `ARC_PASSCODE` | random each start | Fixed passcode for phone mode (6 to 12 digits) |
 
 ## Privacy, security and cost
 
 - **What's sent where:** the document text, your voice, and any images in Google Docs go to OpenAI to run the session. Don't load anything you wouldn't send to OpenAI. Nothing else leaves your computer: fonts and the PDF reader are bundled, so there are no CDN requests. The only exception is the optional Google Docs sign-in, which talks to Google.
 - **Your API key** stays on your machine, in `.env`. The browser only gets a short-lived session token.
 - **The local server** listens on `localhost` only, so nobody else on your network can reach it. Its API refuses requests from other websites (it checks the Host, Origin and Content-Type headers), so a page you visit while ARC is running can't use your key or touch your notes.
+- **In phone mode** the server is visible on your Wi-Fi, over HTTPS. Every device except the computer running ARC must enter the passcode before it can use the API. Unlocking gives that device a session cookie that lasts up to 12 hours, or until ARC restarts.
 - **Comments** are kept in your browser's local storage, and in `inbox/notes.json` for the agent hand-off. Both stay on your computer.
 - **Cost:** OpenAI bills the Realtime API by audio minutes, and skim mode uses much less than full reading. Check [OpenAI's pricing](https://openai.com/api/pricing/) for current rates, and set a budget limit on your OpenAI account.
 

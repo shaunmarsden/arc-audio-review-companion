@@ -39,6 +39,63 @@ const IconMessage = (p: any) => <Icon {...p}><path d="M21 11.5a8.4 8.4 0 0 1-.9 
 const IconX = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Icon>;
 const IconArrowUp = (p: any) => <Icon {...p}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>;
 
+// Shown on other devices (e.g. a phone) in phone mode until the passcode from the terminal is entered.
+export function UnlockScreen() {
+  const [code, setCode] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passcode: code }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not unlock ARC.');
+      window.location.reload();
+    } catch (err: any) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Screen>
+      <div style={{ padding: '24px 20px 24px', display: 'flex', flexDirection: 'column', gap: 24, flex: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 28, alignItems: 'flex-start' }}>
+          <ArcLogo height={72} />
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: ARC.muted, maxWidth: 320 }}>
+            Enter the passcode shown in the terminal where ARC is running.
+          </p>
+        </div>
+        <Card>
+          <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+            <label htmlFor="arc-passcode" style={{ display: 'block', fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: ARC.muted, marginBottom: 6 }}>
+              Passcode
+            </label>
+            <input
+              id="arc-passcode"
+              className="focus-ring"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 12))}
+              style={{
+                width: '100%', height: 48, padding: '0 14px', boxSizing: 'border-box', letterSpacing: '0.3em', fontSize: 20,
+                border: `1px solid ${ARC.border}`, borderRadius: 10, background: ARC.surface2, color: ARC.text,
+                fontFamily: 'inherit', boxShadow: recessShadow
+              }}
+            />
+            {error && <div role="alert" style={{ color: ARC.error, fontSize: 12, marginTop: 8 }}>{error}</div>}
+            <button type="submit" className="arc-btn arc-btn-primary" disabled={busy || code.length < 6} style={{ ...btnPrimary, width: '100%', marginTop: 12, opacity: busy || code.length < 6 ? 0.5 : 1 }}>
+              {busy ? 'Checking...' : 'Unlock'}
+            </button>
+          </form>
+        </Card>
+      </div>
+    </Screen>
+  );
+}
+
 function UploadCard({ onUploadDoc, uploadLoading, uploadError }: any) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   return (
