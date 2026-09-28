@@ -2,9 +2,26 @@
 
 ARC reads your documents aloud and lets you review them by voice. You interrupt whenever you like: to leave a comment, ask what a paragraph means, jump to another section, or have something re-read. Your spoken comments are saved against the section they refer to.
 
-It's built for reviewing work without staring at it: put headphones on and listen, at your desk or on your phone around the house or office.
+It's built for reviewing work without staring at it: put headphones on and listen, at your desk or on the move.
 
-**What you need:** a laptop or desktop to run it on, Node.js 20+, and an OpenAI API key. ARC runs on your computer; you use it in a browser on that computer, or on a phone on the same Wi-Fi ([phone mode](#use-it-from-your-phone)). It's tested in desktop Chrome; Edge, Firefox, Safari and mobile browsers should work but haven't been tested as thoroughly.
+## Try it
+
+**[Open ARC →](https://shaunmarsden.github.io/arc-audio-review-companion/)**
+
+No install needed. It runs in your browser, on a computer or a phone. You'll need an OpenAI API key; the app walks you through getting one (about three minutes, and $5 of credit is plenty to try it). Usage is billed to your own OpenAI account.
+
+It's tested in desktop Chrome. Edge, Firefox, Safari and mobile browsers should work but haven't been tested as thoroughly.
+
+### Hosted version or run it yourself?
+
+| | [Hosted](https://shaunmarsden.github.io/arc-audio-review-companion/) | Run it yourself |
+|---|---|---|
+| Setup | Open the link, paste your key | Node.js, `npm install`, key in `.env` |
+| Where your key lives | Your browser, on that device | `.env` on your computer |
+| Phone | Works directly | Same Wi-Fi, via [phone mode](#use-it-from-your-phone) |
+| Google Docs sign-in, agent hand-off | No | Optional extras |
+
+In the hosted version there's no ARC server: the page talks straight to OpenAI. Your key is stored only in your browser and sent only to OpenAI. The page is locked down with a Content Security Policy, so it can't load third-party scripts or send data anywhere else. For extra peace of mind, give ARC its own API key with a spending limit, and remove it from the menu when you're done.
 
 > This is a fork of [heen2001/arc-audio-review-companion](https://github.com/heen2001/arc-audio-review-companion), which runs on Google Gemini. This version runs on the **OpenAI Realtime API** and adds file upload, skim mode and a British English voice. Credit for the original design and app goes to the upstream author.
 
@@ -12,7 +29,7 @@ It's built for reviewing work without staring at it: put headphones on and liste
 
 ---
 
-## Quick start
+## Run it yourself
 
 You need [Node.js](https://nodejs.org/) 20 or later and an [OpenAI API key](https://platform.openai.com/api-keys). The API key is billed separately from ChatGPT, so add some credit under **Settings → Billing** on the OpenAI platform first. It's worth setting a monthly budget limit there too.
 
@@ -98,7 +115,7 @@ Everything goes in `.env`. Only `OPENAI_API_KEY` is required.
 ## Privacy, security and cost
 
 - **What's sent where:** the document text, your voice, and any images in Google Docs go to OpenAI to run the session. Don't load anything you wouldn't send to OpenAI. Nothing else leaves your computer: fonts and the PDF reader are bundled, so there are no CDN requests. The only exception is the optional Google Docs sign-in, which talks to Google.
-- **Your API key** stays on your machine, in `.env`. The browser only gets a short-lived session token.
+- **Your API key:** in the hosted version it's kept in your browser (local storage) and sent only to OpenAI. When you run it yourself, it stays in `.env` and the browser only gets a short-lived session token.
 - **The local server** listens on `localhost` only, so nobody else on your network can reach it. Its API refuses requests from other websites (it checks the Host, Origin and Content-Type headers), so a page you visit while ARC is running can't use your key or touch your notes.
 - **In phone mode** the server is visible on your Wi-Fi, over HTTPS. Every device except the computer running ARC must enter the passcode before it can use the API. Unlocking gives that device a session cookie that lasts up to 12 hours, or until ARC restarts.
 - **Comments** are kept in your browser's local storage, and in `inbox/notes.json` for the agent hand-off. Both stay on your computer.
@@ -135,12 +152,14 @@ For example, ask Claude Code with a Google Drive connector to "load my latest bu
 ## Development
 
 ```bash
-npm run lint   # type-check
-npm test       # unit tests
-npm run build  # production build
+npm run lint       # type-check
+npm test           # unit tests
+npm run build      # production build (run-it-yourself version)
+npm run dev:web    # hosted (bring-your-own-key) version, locally
+npm run build:web  # hosted build, as deployed to GitHub Pages
 ```
 
-The same checks run on every push via GitHub Actions.
+The checks run on every push via GitHub Actions, and each push to `main` redeploys the hosted version.
 
 ## Licence
 

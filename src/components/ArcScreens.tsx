@@ -1,5 +1,6 @@
 import React from 'react';
 import { MicButton } from './MicButton';
+import { validateApiKey, storeApiKey } from '../lib/backend';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ARC, 
@@ -38,6 +39,100 @@ const IconDots = (p: any) => <Icon {...p} fill="currentColor" stroke="none"><cir
 const IconMessage = (p: any) => <Icon {...p}><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" /></Icon>;
 const IconX = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Icon>;
 const IconArrowUp = (p: any) => <Icon {...p}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>;
+
+// Hosted build only: ARC runs entirely in the browser on the visitor's own OpenAI key.
+export function ApiKeyScreen({ onSaved, onCancel, onForget }: { onSaved: () => void; onCancel?: () => void; onForget?: () => void }) {
+  const [key, setKey] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const submit = async () => {
+    const trimmed = key.trim();
+    if (!/^sk-[A-Za-z0-9_-]{20,}$/.test(trimmed)) {
+      setError("That doesn't look like an OpenAI API key. It should start with sk- and be quite long.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await validateApiKey(trimmed);
+      storeApiKey(trimmed);
+      onSaved();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const step = (n: number, body: React.ReactNode) => (
+    <li style={{ display: 'flex', gap: 10, fontSize: 14, lineHeight: 1.5, color: ARC.text }}>
+      <span style={{ flex: '0 0 22px', height: 22, borderRadius: 999, background: ARC.accentLight, color: ARC.accentText, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>{n}</span>
+      <span>{body}</span>
+    </li>
+  );
+  const link = (href: string, label: string) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: ARC.accentText, textDecoration: 'underline' }}>{label}</a>;
+  return (
+    <Screen>
+      <div style={{ padding: '24px 20px 24px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1, overflowY: 'auto' }} className="arc-scroll">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 28, alignItems: 'flex-start' }}>
+          <ArcLogo height={72} />
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: ARC.muted, maxWidth: 360 }}>
+            ARC reads your documents aloud and lets you review them by voice. It runs on your own OpenAI account, so you'll need an API key. It takes about three minutes.
+          </p>
+        </div>
+
+        <Card>
+          <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 12 }}>Get an OpenAI API key</div>
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {step(1, <>Sign in or create an account at {link('https://platform.openai.com/signup', 'platform.openai.com')}. This is separate from a ChatGPT subscription.</>)}
+            {step(2, <>Add a little credit under {link('https://platform.openai.com/settings/organization/billing/overview', 'Settings → Billing')} ($5 is plenty to try it), and set a monthly limit so you can't overspend.</>)}
+            {step(3, <>Go to {link('https://platform.openai.com/api-keys', 'API keys')}, click <strong>Create new secret key</strong>, then <strong>Copy</strong>.</>)}
+            {step(4, <>Paste it below.</>)}
+          </ol>
+        </Card>
+
+        <Card>
+          <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+            <label htmlFor="arc-api-key" style={{ display: 'block', fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: ARC.muted, marginBottom: 6 }}>
+              Your OpenAI API key
+            </label>
+            <input
+              id="arc-api-key"
+              className="focus-ring"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="sk-..."
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              style={{
+                width: '100%', height: 44, padding: '0 14px', boxSizing: 'border-box',
+                border: `1px solid ${ARC.border}`, borderRadius: 10, background: ARC.surface2, color: ARC.text,
+                fontSize: 14, fontFamily: 'inherit', boxShadow: recessShadow
+              }}
+            />
+            {error && <div role="alert" style={{ color: ARC.error, fontSize: 12, marginTop: 8 }}>{error}</div>}
+            <button type="submit" className="arc-btn arc-btn-primary" disabled={busy || !key.trim()} style={{ ...btnPrimary, width: '100%', marginTop: 12, opacity: busy || !key.trim() ? 0.5 : 1 }}>
+              {busy ? 'Checking key...' : 'Save and continue'}
+            </button>
+            {onCancel && (
+              <button type="button" className="arc-btn arc-btn-ghost" onClick={onCancel} style={{ ...btnGhost, width: '100%', marginTop: 8 }}>
+                Cancel
+              </button>
+            )}
+            {onForget && (
+              <button type="button" className="arc-btn arc-btn-ghost" onClick={onForget} style={{ ...btnGhost, width: '100%', marginTop: 4, color: ARC.error }}>
+                Remove my key from this device
+              </button>
+            )}
+          </form>
+          <p style={{ ...cardCopy, fontSize: 12, margin: '12px 0 0' }}>
+            Your key stays in this browser on this device and is only ever sent to OpenAI. Your documents and voice go to OpenAI to run the session, and usage is billed to your OpenAI account. You can remove the key any time from the menu.
+          </p>
+        </Card>
+      </div>
+    </Screen>
+  );
+}
 
 // Shown on other devices (e.g. a phone) in phone mode until the passcode from the terminal is entered.
 export function UnlockScreen() {
@@ -559,7 +654,7 @@ export function PlaybackScreen({
   comments, onToggleComments, onTogglePlay, onToggleMute, onToggleMenu,
   onPrevChunk, onNextChunk, onJumpChunk, onPrevWindow, onNextWindow,
   onSync, isSyncing, syncError, syncSuccessMessage, onDeleteComment, canSyncToDoc,
-  onLoadNew, onReload, readMode, onToggleReadMode, errorMessage, onDismissError
+  onLoadNew, onReload, readMode, onToggleReadMode, errorMessage, onDismissError, onChangeApiKey
 }: any) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -677,6 +772,7 @@ export function PlaybackScreen({
             style={{ position: 'absolute', top: 60, right: 14, background: ARC.surface2, border: `1px solid ${ARC.border}`, borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06)', padding: 6, minWidth: 200, zIndex: 30 }}
           >
             <MenuItem icon={<IconDoc size={16} stroke={ARC.muted} />} label="Load new document" onClick={() => { onLoadNew(); onToggleMenu(); }} />
+            {onChangeApiKey && <MenuItem icon={<IconCycle size={16} stroke={ARC.muted} />} label="Change OpenAI key" onClick={() => { onChangeApiKey(); onToggleMenu(); }} />}
             {onReload && <MenuItem icon={<IconCycle size={16} stroke={ARC.muted} />} label="Reload document" onClick={() => { onReload(); onToggleMenu(); }} />}
             <div style={{ ...embossedDivider, margin: '4px 6px' }} />
             <MenuItem label="Comments" badge={comments.length} onClick={() => { onToggleComments(); onToggleMenu(); }} />

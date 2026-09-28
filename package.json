@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "vite --port=3000",
     "dev:phone": "vite --port=3443 --host 0.0.0.0 --mode phone",
+    "dev:web": "vite --port=3100 --mode web",
     "build": "vite build",
+    "build:web": "vite build --mode web",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",

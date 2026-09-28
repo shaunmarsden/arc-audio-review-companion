@@ -4,9 +4,10 @@ import { Document, Packer, Paragraph, TextRun, ImageRun } from 'docx';
 import { saveAs } from 'file-saver';
 import systemInstructionMarkdown from './prompts/arc_system_instruction.md?raw';
 // Import custom UI components
-import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen, UnlockScreen } from './components/ArcScreens';
+import { LoadScreenSignedOut, LoadScreenSignedIn, PlaybackScreen, UnlockScreen, ApiKeyScreen } from './components/ArcScreens';
 import { floatTo16BitPCM, arrayBufferToBase64 } from './lib/audioUtils';
 import { fileToChunks } from './lib/fileToChunks';
+import { IS_HOSTED, describeImage, getStoredApiKey, forgetApiKey } from './lib/backend';
 
 // Inline resample function since it's missing from audioUtils
 function resample(audioBuffer: Float32Array, targetSampleRate: number, currentSampleRate: number) {
@@ -303,15 +304,8 @@ async function generateImageAltText(imageUrl: string, title?: string, descriptio
     const buffer = await blob.arrayBuffer();
     const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
 
-    const res = await fetch('/api/describe-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataUrl: `data:${blob.type || 'image/jpeg'};base64,${base64}` })
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error);
-
-    const summary = result.text?.trim() || ctxStr || 'Embedded visual content';
+    const text = await describeImage(`data:${blob.type || 'image/jpeg'};base64,${base64}`);
+    const summary = text.trim() || ctxStr || 'Embedded visual content';
     return `*[Image/Object Summary: ${summary}]*`;
   } catch (error) {
     console.error('Error generating image description:', error);
@@ -432,7 +426,11 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 export default function App() {
   // In phone mode, other devices must unlock the local API with a passcode first.
   const [apiLocked, setApiLocked] = useState(false);
+  // Hosted build: the visitor must add their own OpenAI key before anything else.
+  const [needsApiKey, setNeedsApiKey] = useState(() => IS_HOSTED && !getStoredApiKey());
+  const [changingApiKey, setChangingApiKey] = useState(false);
   useEffect(() => {
+    if (IS_HOSTED) return; // no local server to unlock
     fetch('/api/status').then(r => r.ok ? r.json() : null).then(d => setApiLocked(!!d?.locked)).catch(() => {});
   }, []);
   const [screenState, setScreenState] = useState<'start' | 'player'>(() => {
@@ -1412,6 +1410,7 @@ export default function App() {
 
   // Pick up a doc Claude dropped into inbox/doc.json (loaded once per drop).
   useEffect(() => {
+    if (IS_HOSTED) return; // the agent hand-off needs the local server
     fetch('/api/inbox').then(r => r.ok ? r.json() : null).then(doc => {
       if (!doc?.chunks?.length) return;
       const marker = `${doc.title}|${doc.loadedAt}`;
@@ -1436,7 +1435,7 @@ export default function App() {
     const ids = new Set(capturedIdeas.map(i => i.id));
     const prev = syncedNotesRef.current;
     syncedNotesRef.current = { doc: docChunks, docTitle: loadedDocTitle, ids };
-    if (!prev || prev.doc !== docChunks || prev.docTitle !== loadedDocTitle) return;
+    if (IS_HOSTED || !prev || prev.doc !== docChunks || prev.docTitle !== loadedDocTitle) return;
     const post = (url: string, body: any) => fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docTitle: loadedDocTitle, ...body })
     }).catch(() => {});
@@ -1458,6 +1457,18 @@ export default function App() {
     }]);
     return id;
   };
+
+  if (needsApiKey || changingApiKey) {
+    return (
+      <div className="flex justify-center w-full h-screen overflow-hidden text-gray-900 dark:text-gray-100" style={{ background: '#ebe9e5' }}>
+        <ApiKeyScreen
+          onSaved={() => { setNeedsApiKey(false); setChangingApiKey(false); setMicError(null); }}
+          onCancel={changingApiKey && !needsApiKey ? () => setChangingApiKey(false) : undefined}
+          onForget={changingApiKey && !needsApiKey ? () => { forgetApiKey(); setChangingApiKey(false); setNeedsApiKey(true); } : undefined}
+        />
+      </div>
+    );
+  }
 
   if (apiLocked) {
     return (
@@ -1509,6 +1520,7 @@ export default function App() {
           docNode={<DocumentTextRenderer text={currentChunk.text} />}
           totalSections={docChunks.length}
           readMode={readMode}
+          onChangeApiKey={IS_HOSTED ? () => { stopLiveSession(); setChangingApiKey(true); } : undefined}
           errorMessage={micError}
           onDismissError={() => setMicError(null)}
           onToggleReadMode={() => setReadMode(m => {

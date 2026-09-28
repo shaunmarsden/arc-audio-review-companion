@@ -1,3 +1,5 @@
+import { createRealtimeSession } from '../lib/backend';
+
 // OpenAI Realtime API voice layer. Mirrors the interface of the original GeminiLiveService
 // so App.tsx can drive it the same way: 24kHz PCM16 audio in/out, text injection, tool calls.
 // The browser never sees OPENAI_API_KEY: it fetches a short-lived client secret from
@@ -102,16 +104,9 @@ export class OpenAIRealtimeService {
     this.isReady = false;
 
     callbacks.onDebugLog?.("Requesting realtime session token...");
-    const res = await fetch('/api/realtime-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}'
-    }).catch(() => { throw new Error("Couldn't reach the ARC server. Is `npm run dev` still running?"); });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.value) {
-      throw new Error(data.error || `Failed to create realtime session (HTTP ${res.status})`);
-    }
-    const model = data.model || 'gpt-realtime';
+    const session = await createRealtimeSession();
+    const data = { value: session.clientSecret, voiceStyle: session.voiceStyle };
+    const model = session.model;
     callbacks.onDebugLog?.(`Connecting to ${model}...`);
 
     const ws = new WebSocket(

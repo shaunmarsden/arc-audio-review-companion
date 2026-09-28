@@ -8,16 +8,20 @@ import path from 'path';
 import qrcode from 'qrcode-terminal';
 import type { IncomingMessage, ServerResponse } from 'http';
 import {defineConfig, loadEnv, type Plugin} from 'vite';
+import {
+  DEFAULT_REALTIME_MODEL, DEFAULT_VISION_MODEL, DEFAULT_VOICE, DEFAULT_VOICE_STYLE,
+  realtimeClientSecretRequest, imageDescriptionRequest, outputText, describeOpenAIError,
+} from './src/lib/openaiConfig';
 
 // Server-side OpenAI endpoints so OPENAI_API_KEY never reaches the browser bundle.
 // In phone mode (`npm run dev:phone`) the server is reachable from the local network, so every
 // device other than this computer must unlock the API with a passcode shown in the terminal.
 function openaiApi(env: Record<string, string>, phoneMode: boolean): Plugin {
   const apiKey = process.env.OPENAI_API_KEY || env.OPENAI_API_KEY;
-  const realtimeModel = env.OPENAI_REALTIME_MODEL || 'gpt-realtime';
-  const visionModel = env.OPENAI_VISION_MODEL || 'gpt-5-mini';
-  const defaultVoice = env.OPENAI_VOICE || 'marin';
-  const voiceStyle = env.OPENAI_VOICE_STYLE ?? 'Speak with a natural British English accent (standard Southern British / Received Pronunciation), using British pronunciation and vocabulary throughout. Keep this accent consistently for the whole session, including when reading document text aloud.';
+  const realtimeModel = env.OPENAI_REALTIME_MODEL || DEFAULT_REALTIME_MODEL;
+  const visionModel = env.OPENAI_VISION_MODEL || DEFAULT_VISION_MODEL;
+  const defaultVoice = env.OPENAI_VOICE || DEFAULT_VOICE;
+  const voiceStyle = env.OPENAI_VOICE_STYLE ?? DEFAULT_VOICE_STYLE;
 
   class HttpError extends Error {
     constructor(public status: number, message: string) { super(message); }
@@ -186,24 +190,7 @@ function openaiApi(env: Record<string, string>, phoneMode: boolean): Plugin {
 
     if (req.url === '/api/realtime-session') {
       await readJson(req, 16 * 1024);
-      const r = await openai('realtime/client_secrets', {
-        expires_after: { anchor: 'created_at', seconds: 600 },
-        session: {
-          type: 'realtime',
-          model: realtimeModel,
-          audio: {
-            input: {
-              format: { type: 'audio/pcm', rate: 24000 },
-              transcription: { model: 'gpt-4o-mini-transcribe' },
-              turn_detection: { type: 'server_vad', interrupt_response: true, create_response: true },
-            },
-            output: {
-              format: { type: 'audio/pcm', rate: 24000 },
-              voice: defaultVoice,
-            },
-          },
-        },
-      });
+      const r = await openai('realtime/client_secrets', realtimeClientSecretRequest(realtimeModel, defaultVoice));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new HttpError(r.status, describeOpenAIError(r.status, data));
       return reply(res, 200, { value: data.value, model: realtimeModel, voiceStyle });
@@ -213,27 +200,10 @@ function openaiApi(env: Record<string, string>, phoneMode: boolean): Plugin {
     const body = await readJson(req, 14 * 1024 * 1024);
     const dataUrl = cleanString(body.dataUrl, 14 * 1024 * 1024);
     if (!dataUrl || !/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(dataUrl)) throw new HttpError(400, 'dataUrl must be a base64 image');
-    const r = await openai('responses', {
-      model: visionModel,
-      input: [{
-        role: 'user',
-        content: [
-          { type: 'input_text', text: 'You are an AI assistant generating alt text for a document. Summarize this image or chart concisely (1-2 sentences max) so a listener understands what it shows. Clarify that it is an image/object.' },
-          { type: 'input_image', image_url: dataUrl },
-        ],
-      }],
-    });
+    const r = await openai('responses', imageDescriptionRequest(visionModel, dataUrl));
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new HttpError(r.status, describeOpenAIError(r.status, data));
-    return reply(res, 200, { text: data.output_text ?? data.output?.flatMap((o: any) => o.content || []).find((c: any) => c.type === 'output_text')?.text ?? '' });
-  };
-
-  // Turns OpenAI's error responses into something a first-time user can act on.
-  const describeOpenAIError = (status: number, data: any) => {
-    const msg = data?.error?.message || `OpenAI returned HTTP ${status}`;
-    if (status === 401) return 'OpenAI rejected the API key. Check OPENAI_API_KEY in .env, then restart the dev server.';
-    if (status === 429 && /quota|billing|credit/i.test(msg)) return 'Your OpenAI account has no credit left. Add credit under Settings → Billing on platform.openai.com.';
-    return msg;
+    return reply(res, 200, { text: outputText(data) });
   };
 
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -262,13 +232,47 @@ function openaiApi(env: Record<string, string>, phoneMode: boolean): Plugin {
   };
 }
 
-export default defineConfig(({mode}) => {
+// Hosted build (GitHub Pages): only ARC's own files and OpenAI may be used by the page, so a key
+// pasted into it can't be read by injected third-party scripts or sent anywhere but OpenAI.
+const HOSTED_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "connect-src 'self' https://api.openai.com wss://api.openai.com",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+].join('; ');
+
+export default defineConfig(({mode, command}) => {
   const env = loadEnv(mode, '.', '');
+  // `npm run build:web` / `npm run dev:web`: the hosted, bring-your-own-key version.
+  const hosted = mode === 'web';
   // `npm run dev:phone`: HTTPS (browsers only allow the microphone on HTTPS or localhost)
   // on the local network, with the passcode gate above.
   const phoneMode = mode === 'phone';
   return {
-    plugins: [react(), tailwindcss(), openaiApi(env, phoneMode), ...(phoneMode ? [basicSsl({ name: 'arc-local' })] : [])],
+    base: hosted ? (env.ARC_BASE_PATH || '/arc-audio-review-companion/') : '/',
+    define: {
+      'import.meta.env.VITE_HOSTED': JSON.stringify(hosted ? 'true' : 'false'),
+      // The hosted build never uses Firebase sign-in, so none of that config is bundled.
+      ...(hosted ? Object.fromEntries(Object.keys(env).filter(k => k.startsWith('VITE_FIREBASE_')).map(k => [`import.meta.env.${k}`, '""'])) : {}),
+    },
+    plugins: [
+      react(),
+      tailwindcss(),
+      // The hosted build has no server; the local API only exists for `npm run dev` / `dev:phone`.
+      ...(hosted ? [] : [openaiApi(env, phoneMode)]),
+      ...(phoneMode ? [basicSsl({ name: 'arc-local' })] : []),
+      ...(hosted && command === 'build' ? [{
+        name: 'arc-hosted-csp',
+        transformIndexHtml: (html: string) => html.replace('<head>', `<head>\n    <meta http-equiv="Content-Security-Policy" content="${HOSTED_CSP}" />`),
+      }] : []),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
