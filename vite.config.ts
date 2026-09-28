@@ -38,10 +38,21 @@ function openaiApi(env: Record<string, string>): Plugin {
       if (!fs.existsSync(file)) return reply(res, 404, { error: 'No doc in inbox' });
       return reply(res, 200, JSON.parse(fs.readFileSync(file, 'utf8')));
     }
-    if (req.method === 'POST' && req.url === '/api/notes') {
-      const body = await readJson(req);
+    // Notes are stored per doc and only ever changed one note at a time, so a stale or
+    // freshly reloaded tab can never wipe notes another tab captured.
+    if (req.method === 'POST' && (req.url === '/api/notes/add' || req.url === '/api/notes/delete')) {
+      const { docTitle, note, id } = await readJson(req);
+      const file = path.join(inboxDir, 'notes.json');
       fs.mkdirSync(inboxDir, { recursive: true });
-      fs.writeFileSync(path.join(inboxDir, 'notes.json'), JSON.stringify({ ...body, savedAt: new Date().toISOString() }, null, 2));
+      let store: any = {};
+      try { store = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+      if (!store.docs) store = { docs: {} };
+      const key = docTitle || 'Untitled document';
+      const entry = store.docs[key] ||= { notes: [] };
+      if (req.url === '/api/notes/add' && note?.id && !entry.notes.some((n: any) => n.id === note.id)) entry.notes.push(note);
+      if (req.url === '/api/notes/delete') entry.notes = entry.notes.filter((n: any) => n.id !== id);
+      entry.updatedAt = new Date().toISOString();
+      fs.writeFileSync(file, JSON.stringify(store, null, 2));
       return reply(res, 200, { ok: true });
     }
     if (req.method !== 'POST' || !req.url?.startsWith('/api/')) return next();

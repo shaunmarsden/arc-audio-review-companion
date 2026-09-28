@@ -1852,16 +1852,20 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  // Mirror captured notes to inbox/notes.json so Claude can read them back.
+  // Mirror note additions/deletions to inbox/notes.json so Claude can read them back.
+  // Only diffs are sent, so reloads and other tabs never overwrite the stored notes.
+  const syncedNotesRef = useRef<{ docTitle: string | null; ids: Set<string> } | null>(null);
   useEffect(() => {
-    fetch('/api/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        docTitle: loadedDocTitle,
-        notes: capturedIdeas.map(i => ({ section: i.section, text: i.text, source: i.source, timestamp: i.timestamp }))
-      })
+    const ids = new Set(capturedIdeas.map(i => i.id));
+    const prev = syncedNotesRef.current;
+    syncedNotesRef.current = { docTitle: loadedDocTitle, ids };
+    if (!prev || prev.docTitle !== loadedDocTitle) return; // first render or new doc: nothing changed by the user
+    const post = (url: string, body: any) => fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docTitle: loadedDocTitle, ...body })
     }).catch(() => {});
+    capturedIdeas.filter(i => !prev.ids.has(i.id)).forEach(i =>
+      post('/api/notes/add', { note: { id: i.id, section: i.section, text: i.text, source: i.source, timestamp: i.timestamp } }));
+    prev.ids.forEach(id => { if (!ids.has(id)) post('/api/notes/delete', { id }); });
   }, [capturedIdeas, loadedDocTitle]);
 
   const addIdea = (text: string, source: 'user' | 'arc', explicitImageUrl?: string, skipImage: boolean = false) => {
