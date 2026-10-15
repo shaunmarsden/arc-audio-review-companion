@@ -21,7 +21,7 @@ It's tested in desktop Chrome. Edge, Firefox, Safari and mobile browsers should 
 | Phone | Works directly | Same Wi-Fi, via [phone mode](#use-it-from-your-phone) |
 | Google Docs sign-in, agent hand-off | No | Optional extras |
 
-In the hosted version there's no ARC server: the page talks straight to OpenAI. Your key is stored only in your browser and sent only to OpenAI. The page is locked down with a Content Security Policy, so it can't load third-party scripts or send data anywhere else. For extra peace of mind, give ARC its own API key with a spending limit, and remove it from the menu when you're done.
+In the hosted version there's no ARC server: the page talks straight to OpenAI. Your key is stored only in your browser and sent only to OpenAI. The page is locked down with a Content Security Policy, so it can't load third-party scripts or send data anywhere else. Give ARC its own OpenAI project and API key, set an enforced monthly spending limit for that project, and remove the key from the menu when you're done. An alert alone won't stop requests, and enforcement can lag slightly. See [OpenAI's spending controls](https://developers.openai.com/api/docs/guides/spend-limits).
 
 > This is a fork of [heen2001/arc-audio-review-companion](https://github.com/heen2001/arc-audio-review-companion), which runs on Google Gemini. This version runs on the **OpenAI Realtime API** and adds file upload, skim mode and a British English voice. Credit for the original design and app goes to the upstream author.
 
@@ -31,7 +31,7 @@ In the hosted version there's no ARC server: the page talks straight to OpenAI. 
 
 ## Run it yourself
 
-You need [Node.js](https://nodejs.org/) 20 or later and an [OpenAI API key](https://platform.openai.com/api-keys). The API key is billed separately from ChatGPT, so add some credit under **Settings → Billing** on the OpenAI platform first. It's worth setting a monthly budget limit there too.
+You need [Node.js](https://nodejs.org/) 20 or later and an [OpenAI API key](https://platform.openai.com/api-keys). The API key is billed separately from ChatGPT, so add some credit under **Settings > Billing** on the OpenAI platform first. In your project's **Limits** settings, set a monthly spending limit and turn on **Enforce a hard limit**. A spending alert alone won't stop requests. Even with enforcement, recorded spend can slightly exceed the limit while it takes effect.
 
 ```bash
 git clone https://github.com/shaunmarsden/arc-audio-review-companion.git
@@ -119,7 +119,7 @@ Everything goes in `.env`. Only `OPENAI_API_KEY` is required.
 - **The local server** listens on `localhost` only, so nobody else on your network can reach it. Its API refuses requests from other websites (it checks the Host, Origin and Content-Type headers), so a page you visit while ARC is running can't use your key or touch your notes.
 - **In phone mode** the server is visible on your Wi-Fi, over HTTPS. Every device except the computer running ARC must enter the passcode before it can use the API. Unlocking gives that device a session cookie that lasts up to 12 hours, or until ARC restarts.
 - **Comments** are kept in your browser's local storage, and in `inbox/notes.json` for the agent hand-off. Both stay on your computer.
-- **Cost:** OpenAI bills the Realtime API by audio minutes, and skim mode uses much less than full reading. Check [OpenAI's pricing](https://openai.com/api/pricing/) for current rates, and set a budget limit on your OpenAI account.
+- **Cost:** usage is billed to your OpenAI account. Check [OpenAI's pricing](https://openai.com/api/pricing/) for current rates and monitor your usage. A monthly spending alert only notifies you; to stop requests, turn on an enforced limit for the project. Enforcement isn't instant, so recorded spend can slightly exceed the limit.
 
 ---
 
