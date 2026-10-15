@@ -136,9 +136,10 @@ export function ApiKeyScreen({ onSaved, onCancel, onForget, onFeedback }: { onSa
           <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 12 }}>Get an OpenAI API key</div>
           <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {step(1, <>Sign in or create an account at {link('https://platform.openai.com/signup', 'platform.openai.com')}. This is separate from a ChatGPT subscription.</>)}
-            {step(2, <>Add a little credit under {link('https://platform.openai.com/settings/organization/billing/overview', 'Settings → Billing')} ($5 is plenty to try it), and set a monthly limit so you can't overspend.</>)}
-            {step(3, <>Go to {link('https://platform.openai.com/api-keys', 'API keys')}, click <strong>Create new secret key</strong>, then <strong>Copy</strong>.</>)}
-            {step(4, <>Paste it below.</>)}
+            {step(2, <>Add a little credit under {link('https://platform.openai.com/settings/organization/billing/overview', 'Settings > Billing')}.</>)}
+            {step(3, <>In {link('https://platform.openai.com/settings/organization/projects', 'Project settings')}, choose <strong>Limits</strong> and turn on <strong>Enforce a hard limit</strong>. An alert alone won't stop usage, and enforcement can lag slightly.</>)}
+            {step(4, <>Go to {link('https://platform.openai.com/api-keys', 'API keys')}, choose the same project, click <strong>Create new secret key</strong>, then <strong>Copy</strong>.</>)}
+            {step(5, <>Paste it below.</>)}
           </ol>
         </Card>
 
