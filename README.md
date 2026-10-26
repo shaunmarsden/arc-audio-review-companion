@@ -105,7 +105,7 @@ Everything goes in `.env`. Only `OPENAI_API_KEY` is required.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `OPENAI_API_KEY` | — | Your OpenAI key. Used only by the local server, never sent to the browser. |
+| `OPENAI_API_KEY` | none (required) | Your OpenAI key. Used only by the local server, never sent to the browser. |
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime` | The voice model |
 | `OPENAI_VOICE` | `marin` | Base voice (others include `cedar`, `sage`, `alloy`) |
 | `OPENAI_VOICE_STYLE` | British English accent | Accent and style instruction. Set it empty to use the voice's natural accent. |
@@ -159,7 +159,7 @@ npm run dev:web    # hosted (bring-your-own-key) version, locally
 npm run build:web  # hosted build, as deployed to GitHub Pages
 ```
 
-The checks run on every push via GitHub Actions, and each push to `main` redeploys the hosted version.
+The checks run through GitHub Actions on every push to `main` and every pull request, and each push to `main` redeploys the hosted version.
 
 ## Feedback
 
