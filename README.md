@@ -8,7 +8,7 @@ It's built for reviewing work without staring at it: put headphones on and liste
 
 **[Open ARC →](https://shaunmarsden.github.io/arc-audio-review-companion/)**
 
-No install needed. It runs in your browser, on a computer or a phone. You'll need an OpenAI API key; the app walks you through getting one (about three minutes, and $5 of credit is plenty to try it). Usage is billed to your own OpenAI account.
+No install needed. It runs in your browser, on a computer or a phone. You'll need an OpenAI API key; the app walks you through getting one (about three minutes). Usage is billed to your own OpenAI account, so add a little credit and set a spending limit first, as described below. I haven't measured what a typical session costs; [OpenAI's pricing page](https://openai.com/api/pricing/) has current rates.
 
 It's tested in desktop Chrome. Edge, Firefox, Safari and mobile browsers should work but haven't been tested as thoroughly.
 
